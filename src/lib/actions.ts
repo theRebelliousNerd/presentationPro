@@ -29,14 +29,15 @@ Sub-Industry: ${initialInput.subIndustry}
 Tone (Formality): ${formality}
 Tone (Energy): ${energy}
 Graphic Style: ${initialInput.graphicStyle}
-Files: ${initialInput.files.map(f => f.name).join(', ')}`;
+Content Files: ${initialInput.files.map(f => f.name).join(', ')}
+Style Guide Files: ${initialInput.styleFiles.map(f => f.name).join(', ')}`;
 
   const inputText = [
     initialPrompt,
     ...history.map(m => `${m.role}: ${m.content}`)
   ].join('\n\n');
   
-  const allFiles = [...initialInput.files, ...newFiles];
+  const allFiles = [...initialInput.files, ...initialInput.styleFiles, ...newFiles];
   const uploadedFiles = allFiles.map(f => f.dataUrl);
 
   return await refinePresentationGoals({ inputText, uploadedFiles });

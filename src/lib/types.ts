@@ -18,6 +18,7 @@ export type Presentation = {
   initialInput: {
     text: string;
     files: { name: string; dataUrl: string }[];
+    styleFiles: { name: string; dataUrl: string }[];
     length: string;
     audience: string;
     industry: string;

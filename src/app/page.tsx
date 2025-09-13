@@ -26,6 +26,7 @@ export default function Home() {
   const handleStartClarifying = (values: {
     text: string;
     files: { name: string; dataUrl: string }[];
+    styleFiles: { name: string; dataUrl: string }[];
     length: string;
     audience: string;
     industry: string;

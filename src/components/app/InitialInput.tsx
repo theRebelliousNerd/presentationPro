@@ -15,6 +15,7 @@ type InitialInputProps = {
   onStart: (values: {
     text: string;
     files: { name: string; dataUrl: string }[];
+    styleFiles: { name: string; dataUrl: string }[];
     length: string;
     audience: string;
     industry: string;
@@ -29,8 +30,8 @@ const ENERGY_LABELS = ['Very Low', 'Low', 'Neutral', 'High', 'Very High'];
 
 export default function InitialInput({ onStart }: InitialInputProps) {
   const [text, setText] = useState('');
-  const [files, setFiles] = useState<{ name: string; dataUrl: string }[]>([]);
-  const [styleFiles, setStyleFiles] = useState<{ name: string; dataUrl: string }[]>([]);
+  const [files, setFiles] = useState<File[]>([]);
+  const [styleFiles, setStyleFiles] = useState<File[]>([]);
   const [length, setLength] = useState('medium');
   const [audience, setAudience] = useState('general');
   const [industry, setIndustry] = useState('');
@@ -52,8 +53,19 @@ export default function InitialInput({ onStart }: InitialInputProps) {
   
   const isButtonDisabled = !text.trim() && files.length === 0;
 
-  const handleSubmit = () => {
-    onStart({ text, files, length, audience, industry, subIndustry, tone, graphicStyle });
+  const fileToDataUrl = (file: File): Promise<{ name: string; dataUrl: string }> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = event => resolve({ name: file.name, dataUrl: event.target?.result as string });
+      reader.onerror = error => reject(error);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  const handleSubmit = async () => {
+    const contentFilesData = await Promise.all(files.map(fileToDataUrl));
+    const styleFilesData = await Promise.all(styleFiles.map(fileToDataUrl));
+    onStart({ text, files: contentFilesData, styleFiles: styleFilesData, length, audience, industry, subIndustry, tone, graphicStyle });
   }
 
   return (
@@ -169,6 +181,7 @@ export default function InitialInput({ onStart }: InitialInputProps) {
         <Separator />
          <div className="space-y-2">
             <Label className="text-base font-headline font-semibold text-foreground">Presentation Content</Label>
+            <CardDescription>The core material for your presentation. Paste text below and/or upload supporting documents, data, charts, etc.</CardDescription>
             <Textarea
               placeholder="Paste your presentation content here..."
               className="min-h-[200px] text-base p-4"
@@ -183,6 +196,7 @@ export default function InitialInput({ onStart }: InitialInputProps) {
         <Separator />
         <div className="space-y-2">
             <Label className="text-base font-headline font-semibold text-foreground">Style Guide (Optional)</Label>
+            <CardDescription>Upload files to guide the visual style (e.g., brand guidelines, logos, color palettes, background images).</CardDescription>
              <FileDropzone 
               onFilesChange={setStyleFiles}
               acceptedFormats=".pdf, .png, .jpg, .jpeg"

@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback, Dispatch, SetStateAction } from 'react';
-import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
 import type { AppState, Presentation } from '@/lib/types';
@@ -16,6 +16,7 @@ const getInitialState = (id: string): {
     initialInput: {
       text: '',
       files: [],
+      styleFiles: [],
       length: 'medium',
       audience: 'general',
       industry: '',
