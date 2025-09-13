@@ -4,26 +4,26 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%; /* #FFFFFF - Pure White */
-    --foreground: 220 26% 11%; /* #192940 - Deep Navy */
+    --background: 0 0% 95%; /* #F2F2F2 - Light Gray */
+    --foreground: 220 46% 17%; /* #172940 - Deep Navy */
 
-    --card: 0 0% 97%; /* #F8F8F8 - Very Light Gray */
-    --card-foreground: 220 26% 11%;
+    --card: 0 0% 100%; /* #FFFFFF - Pure White */
+    --card-foreground: 220 46% 17%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 26% 11%;
+    --popover-foreground: 220 46% 17%;
 
-    --primary: 153 42% 40%; /* #3a8a3a - Muted Green as Primary for now*/
+    --primary: 94 40% 54%; /* #8ABF54 - Action Green */
     --primary-foreground: 0 0% 98%;
 
-    --secondary: 85 45% 53%; /* #73BF50 - Action Green */
-    --secondary-foreground: 220 26% 11%;
+    --secondary: 211 20% 41%; /* #556273 - Slate Blue */
+    --secondary-foreground: 0 0% 98%;
 
     --muted: 0 0% 95%; /* #F2F2F2 - Light Gray */
     --muted-foreground: 211 15% 45%; /* #677180 - Lighter Slate Blue */
 
-    --accent: 85 45% 63%; /* #8cd26b - Lighter Action Green */
-    --accent-foreground: 220 26% 11%;
+    --accent: 98 28% 60%; /* #9ABF75 - Muted Green */
+    --accent-foreground: 220 46% 17%;
 
     --destructive: 0 72% 51%; /* #e53e3e */
     --destructive-foreground: 0 0% 98%;
@@ -32,12 +32,12 @@
     --success: 142 71% 45%; /* #28a745 */
 
     --border: 0 0% 89%; /* #E2E2E2 - Lighter border */
-    --input: 0 0% 95%; /* #F2F2F2 - Light Gray */
-    --ring: 85 45% 53%; /* Action Green for focus rings */
+    --input: 0 0% 100%; /* #FFFFFF - White */
+    --ring: 94 40% 54%; /* Action Green for focus rings */
 
-    --chart-1: 85 45% 53%; /* Action Green */
-    --chart-2: 211 25% 40%; /* Slate Blue */
-    --chart-3: 85 45% 63%; /* Lighter Green */
+    --chart-1: 94 40% 54%; /* Action Green */
+    --chart-2: 211 20% 41%; /* Slate Blue */
+    --chart-3: 98 28% 60%; /* Muted Green */
     --chart-4: 211 25% 60%; /* Lighter Slate Blue */
     --chart-5: 38 92% 50%; /* Warning Orange */
     
@@ -45,40 +45,40 @@
   }
 
   .dark {
-    --background: 220 26% 11%; /* #121822 - Even darker blue */
-    --foreground: 210 40% 98%; /* Almost white for high contrast */
+    --background: 220 46% 17%; /* #172940 - Deep Navy */
+    --foreground: 0 0% 95%; /* #F2F2F2 - Light Gray */
 
-    --card: 220 26% 14%; /* #17202d - Dark card background */
-    --card-foreground: 210 40% 98%;
+    --card: 220 46% 22%; /* Slightly lighter navy */
+    --card-foreground: 0 0% 95%;
 
-    --popover: 220 26% 14%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 220 46% 22%;
+    --popover-foreground: 0 0% 95%;
 
-    --primary: 211 25% 40%; /* #556273 - Slate Blue */
-    --primary-foreground: 210 40% 98%;
+    --primary: 94 40% 54%; /* #8ABF54 - Action Green */
+    --primary-foreground: 220 46% 17%;
 
-    --secondary: 100 45% 55%; /* #8ABF54 - Vibrant Green */
-    --secondary-foreground: 220 26% 11%;
+    --secondary: 211 20% 41%; /* #556273 - Slate Blue */
+    --secondary-foreground: 0 0% 98%;
 
-    --muted: 220 26% 20%; /* #242c3a */
-    --muted-foreground: 220 15% 65%; /* #939cac */
+    --muted: 220 46% 25%;
+    --muted-foreground: 220 15% 65%;
 
-    --accent: 100 45% 65%; /* #a2cf7a - Lighter green for accents */
-    --accent-foreground: 220 26% 11%;
+    --accent: 98 28% 60%; /* #9ABF75 - Muted Green */
+    --accent-foreground: 220 46% 17%;
 
     --destructive: 0 72% 51%; /* #e53e3e */
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 0 0% 98%;
 
     --warning: 38 92% 50%; /* #f9ac14 */
     --success: 142 71% 45%; /* #28a745 */
 
-    --border: 220 26% 25%; /* #313b4e */
-    --input: 220 26% 20%;
-    --ring: 100 45% 55%; /* Vibrant Green for focus rings */
+    --border: 220 46% 30%;
+    --input: 220 46% 25%;
+    --ring: 94 40% 54%; /* Action Green */
 
-    --chart-1: 100 45% 55%; /* Vibrant Green */
-    --chart-2: 211 25% 40%; /* Slate Blue */
-    --chart-3: 100 45% 65%; /* Lighter Green */
+    --chart-1: 94 40% 54%; /* Action Green */
+    --chart-2: 211 20% 41%; /* Slate Blue */
+    --chart-3: 98 28% 60%; /* Muted Green */
     --chart-4: 211 25% 60%; /* Lighter Slate Blue */
     --chart-5: 38 92% 50%; /* Warning Orange */
   }
