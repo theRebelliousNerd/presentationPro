@@ -86,3 +86,4 @@ GOOGLE_GENAI_API_KEY=your_api_key_here
 - Images are generated asynchronously after slides are created
 - Presentation data auto-saves to localStorage
 - Firebase integration is configured but implementation details vary by deployment
+- remember never to change port numbers
