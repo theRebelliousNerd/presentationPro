@@ -47,30 +47,50 @@ const prompt = ai.definePrompt({
   input: {schema: GenerateSlideContentInputSchema},
   output: {schema: GenerateSlideContentOutputSchema},
   prompt: `You are an expert presentation creator and storyteller. Given the outline below, create content for each slide.
+  Use the provided context on great orators to inform the narrative flow, slide content, and speaker notes.
 
-Outline:
-{{#each outline}}
-- {{{this}}}
-{{/each}}
+  START OF CONTEXT
+  The Orator's Crucible: An Analytical History of the World's Greatest Presenters
+  - Core Competencies: Audience Centricity, Narrative Structure, Emotional Resonance (pathos), Credibility/Confidence (ethos), Clarity/Logic (logos).
+  - Key Insight: Greatness is not born, it's made through practice.
+  - Techniques from the Masters:
+    - Socrates: Questioning, interactive dialogue.
+    - Demosthenes: Passionate, direct calls to action.
+    - Cicero: Balance of logic, emotion, credibility (logos, pathos, ethos). Goal: teach, delight, move.
+    - Martin Luther: Simplicity, direct and conversational style.
+    - Queen Elizabeth I: Strategic, paradoxical rhetoric, inclusive language.
+    - Abraham Lincoln: Simplicity, logical clarity, humble persona.
+    - Frederick Douglass: Using lived experience and moral authority to expose hypocrisy.
+    - Susan B. Anthony: Relentless logical arguments (logos).
+    - Steve Jobs: Minimalist visuals, rule of three, hero/villain storytelling.
+    - Brené Brown: Vulnerable, authentic, personal storytelling.
+    - Barack Obama: Unifying narrative, allusion, parallelism.
+    - Martin Luther King, Jr.: Anaphora (repetition), metaphor, moral/spiritual framing.
+  END OF CONTEXT
 
-For each slide, generate:
+  Outline:
+  {{#each outline}}
+  - {{{this}}}
+  {{/each}}
 
-*   A concise title.
-*   An array of 1-4 bullet points summarizing the key information for the slide.
-*   Detailed speaker notes that not only explain the slide's content but also create a compelling narrative that flows smoothly from one slide to the next, telling a cohesive story throughout the presentation.
-*   A descriptive image prompt that can be used to generate a relevant image for the slide.
+  For each slide, generate:
 
-Return the result as a JSON array of slide objects. Each slide object should have the following structure:
+  *   A concise title.
+  *   An array of 1-4 bullet points summarizing the key information for the slide.
+  *   Detailed speaker notes that not only explain the slide's content but also create a compelling narrative that flows smoothly from one slide to the next, telling a cohesive story throughout the presentation. The speaker notes should be crafted with the techniques of the great orators in mind.
+  *   A descriptive image prompt that can be used to generate a relevant image for the slide.
 
-{
-  "title": "Slide Title",
-  "content": ["Bullet point 1", "Bullet point 2"],
-  "speakerNotes": "Detailed notes for the presenter that connect this slide to the previous one and set up the next one.",
-  "imagePrompt": "A descriptive image prompt"
-}
+  Return the result as a JSON array of slide objects. Each slide object should have the following structure:
 
-Ensure that the output is valid JSON.
-`, // Ensure valid JSON
+  {
+    "title": "Slide Title",
+    "content": ["Bullet point 1", "Bullet point 2"],
+    "speakerNotes": "Detailed notes for the presenter that connect this slide to the previous one and set up the next one.",
+    "imagePrompt": "A descriptive image prompt"
+  }
+
+  Ensure that the output is valid JSON.
+  `,
 });
 
 const generateSlideContentFlow = ai.defineFlow(
