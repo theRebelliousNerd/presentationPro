@@ -14,6 +14,7 @@ export type Slide = {
 };
 
 export type Presentation = {
+  id: string;
   initialInput: {
     text: string;
     files: { name: string; dataUrl: string }[];

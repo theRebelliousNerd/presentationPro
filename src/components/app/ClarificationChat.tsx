@@ -4,7 +4,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription }
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, User, Bot, Loader2, Lightbulb, Paperclip } from 'lucide-react';
+import { Send, User, Bot, Loader2, Lightbulb } from 'lucide-react';
 import { getClarification } from '@/lib/actions';
 import { Presentation, ChatMessage } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -15,6 +15,7 @@ type ClarificationChatProps = {
   presentation: Presentation;
   setPresentation: Dispatch<SetStateAction<Presentation>>;
   onClarificationComplete: (finalGoals: string) => void;
+  uploadFile: (file: File) => Promise<{ name: string; dataUrl: string; }>;
 };
 
 const CONTEXT_SUGGESTIONS = [
@@ -26,9 +27,9 @@ const CONTEXT_SUGGESTIONS = [
   'Mention any important competitors or market context.',
 ];
 
-export default function ClarificationChat({ presentation, setPresentation, onClarificationComplete }: ClarificationChatProps) {
+export default function ClarificationChat({ presentation, setPresentation, onClarificationComplete, uploadFile }: ClarificationChatProps) {
   const [input, setInput] = useState('');
-  const [newFiles, setNewFiles] = useState<{ name: string; dataUrl: string }[]>([]);
+  const [newRawFiles, setNewRawFiles] = useState<File[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(10);
   const [suggestion, setSuggestion] = useState('');
@@ -62,15 +63,15 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
         }
       }
     };
-    getInitialMessage();
-  }, []);
+    if (presentation.id) { // Only run if presentation is loaded
+      getInitialMessage();
+    }
+  }, [presentation.id]); // Rerun when presentation ID changes
 
   useEffect(() => {
-    // Update progress based on chat length
     const newProgress = Math.min(10 + chatHistory.length * 15, 85);
     setProgress(newProgress);
     
-    // Update suggestion
     if (chatHistory.length < CONTEXT_SUGGESTIONS.length) {
       setSuggestion(CONTEXT_SUGGESTIONS[chatHistory.length]);
     } else {
@@ -81,34 +82,50 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!input.trim() && newFiles.length === 0) || isLoading) return;
+    if ((!input.trim() && newRawFiles.length === 0) || isLoading) return;
+    
+    setIsLoading(true);
 
     let messageContent = input;
-    if (newFiles.length > 0) {
-      const fileNames = newFiles.map(f => f.name).join(', ');
+    const uploadedFileInfos: { name: string; dataUrl: string; }[] = [];
+
+    if (newRawFiles.length > 0) {
+      const fileNames = newRawFiles.map(f => f.name).join(', ');
       messageContent += `\n\n(Attached files: ${fileNames})`;
+
+      // Upload files to storage
+      for (const file of newRawFiles) {
+        try {
+          const uploadedFile = await uploadFile(file);
+          uploadedFileInfos.push(uploadedFile);
+        } catch (error) {
+          console.error(`Failed to upload file ${file.name}:`, error);
+          // Handle upload error, maybe show a toast to the user
+          setIsLoading(false);
+          return;
+        }
+      }
     }
 
     const newUserMessage: ChatMessage = { role: 'user', content: messageContent.trim() };
     const newHistory = [...chatHistory, newUserMessage];
     setPresentation(prev => ({...prev, chatHistory: newHistory}));
     setInput('');
-    setNewFiles([]); // Clear files after sending
-    setIsLoading(true);
-
+    setNewRawFiles([]); // Clear raw files
+    
     try {
-      // We pass the new files along with the history
-      const response = await getClarification(newHistory, initialInput, newFiles);
+      // Pass the newly uploaded file info (with storage URLs) to the AI
+      const response = await getClarification(newHistory, initialInput, uploadedFileInfos);
       const aiResponseContent = response.refinedGoals.replace('---FINISHED---', '').trim();
       const newAiMessage: ChatMessage = { role: 'model', content: aiResponseContent };
       
-      // We also add the newly uploaded files to the permanent presentation state
+      // Add the new files to the presentation's file list
       setPresentation(prev => ({
         ...prev, 
         chatHistory: [...newHistory, newAiMessage],
         initialInput: {
           ...prev.initialInput,
-          files: [...prev.initialInput.files, ...newFiles]
+          files: [...prev.initialInput.files, ...uploadedFileInfos]
         }
       }));
       
@@ -145,7 +162,7 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
                 {message.role === 'user' && <User className="h-6 w-6 text-foreground flex-shrink-0 mt-1" />}
               </div>
             ))}
-            {isLoading && (
+            {isLoading && chatHistory.length > 0 && (
               <div className="flex items-start gap-3 justify-start">
                 <Bot className="h-6 w-6 text-primary flex-shrink-0 mt-1" />
                 <div className="p-4 rounded-xl bg-muted">
@@ -153,11 +170,17 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
                 </div>
               </div>
             )}
+             {isLoading && chatHistory.length === 0 && (
+                <div className="flex items-center gap-3">
+                    <Bot className="h-6 w-6 text-primary flex-shrink-0" />
+                    <Skeleton className="w-3/4 h-12" />
+                </div>
+            )}
           </div>
         </ScrollArea>
         <div className="flex-shrink-0 pt-2 space-y-4">
             <FileDropzone 
-              onFilesChange={setNewFiles}
+              onFilesChange={setNewRawFiles}
               acceptedFormats=".pdf, .docx, .md, .txt, .png, .jpg, .jpeg, .csv, .xls, .xlsx"
             />
             <div className="space-y-2">
@@ -182,8 +205,8 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
             disabled={isLoading}
             autoComplete="off"
           />
-          <Button type="submit" disabled={isLoading || (!input.trim() && newFiles.length === 0)}>
-            <Send className="h-4 w-4" />
+          <Button type="submit" disabled={isLoading || (!input.trim() && newRawFiles.length === 0)}>
+            {isLoading && newRawFiles.length > 0 ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </form>
       </CardFooter>

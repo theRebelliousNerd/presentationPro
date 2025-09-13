@@ -20,6 +20,7 @@ export default function Home() {
     presentation,
     setPresentation,
     resetState,
+    uploadFile,
   } = usePresentationState();
 
   const handleStartClarifying = (values: {
@@ -72,6 +73,7 @@ export default function Home() {
             setPresentation(prev => ({...prev, clarifiedGoals: goals}));
             setAppState('approving');
           }}
+          uploadFile={uploadFile}
           />;
       case 'approving':
         return <OutlineApproval

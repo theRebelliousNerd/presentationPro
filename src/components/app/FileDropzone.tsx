@@ -6,35 +6,19 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 type FileDropzoneProps = {
-  onFilesChange: (files: { name: string; dataUrl: string }[]) => void;
+  onFilesChange: (files: File[]) => void;
   acceptedFormats: string;
 };
 
 export default function FileDropzone({ onFilesChange, acceptedFormats }: FileDropzoneProps) {
   const [isDragging, setIsDragging] = useState(false);
-  const [files, setFiles] = useState<{ name: string; dataUrl: string }[]>([]);
+  const [files, setFiles] = useState<File[]>([]);
 
   const handleFileChange = useCallback(
     (newFiles: FileList) => {
-      const validFiles = Array.from(newFiles);
-      const allFiles = [...files];
-
-      let processedCount = 0;
-      validFiles.forEach(file => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const dataUrl = e.target?.result as string;
-          if (dataUrl) {
-            allFiles.push({ name: file.name, dataUrl });
-          }
-          processedCount++;
-          if (processedCount === validFiles.length) {
-             setFiles(allFiles);
-             onFilesChange(allFiles);
-          }
-        };
-        reader.readAsDataURL(file);
-      });
+      const allFiles = [...files, ...Array.from(newFiles)];
+      setFiles(allFiles);
+      onFilesChange(allFiles);
     },
     [files, onFilesChange]
   );
@@ -100,7 +84,7 @@ export default function FileDropzone({ onFilesChange, acceptedFormats }: FileDro
       </div>
       {files.length > 0 && (
         <div className="mt-4 space-y-3">
-          <h4 className="font-headline font-semibold text-sm text-foreground">Uploaded files:</h4>
+          <h4 className="font-headline font-semibold text-sm text-foreground">Files to upload:</h4>
           <ul className="space-y-2">
             {files.map((file, index) => (
               <li key={index} className="flex items-center justify-between bg-muted/30 border border-border/50 p-3 rounded-lg text-xs hover:bg-muted/50 transition-colors">
