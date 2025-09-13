@@ -25,7 +25,7 @@ const SlideSchema = z.object({
     .min(1)
     .max(4)
     .describe('An array of 1-4 strings for bullet points on the slide.'),
-  speakerNotes: z.string().describe('Detailed speaker notes for the slide.'),
+  speakerNotes: z.string().describe('Detailed speaker notes for the slide that create a narrative flow.'),
   imagePrompt: z
     .string()
     .describe(
@@ -46,7 +46,7 @@ const prompt = ai.definePrompt({
   name: 'generateSlideContentPrompt',
   input: {schema: GenerateSlideContentInputSchema},
   output: {schema: GenerateSlideContentOutputSchema},
-  prompt: `You are an expert presentation creator. Given the outline below, create content for each slide.
+  prompt: `You are an expert presentation creator and storyteller. Given the outline below, create content for each slide.
 
 Outline:
 {{#each outline}}
@@ -57,7 +57,7 @@ For each slide, generate:
 
 *   A concise title.
 *   An array of 1-4 bullet points summarizing the key information for the slide.
-*   Detailed speaker notes to guide the presenter.
+*   Detailed speaker notes that not only explain the slide's content but also create a compelling narrative that flows smoothly from one slide to the next, telling a cohesive story throughout the presentation.
 *   A descriptive image prompt that can be used to generate a relevant image for the slide.
 
 Return the result as a JSON array of slide objects. Each slide object should have the following structure:
@@ -65,7 +65,7 @@ Return the result as a JSON array of slide objects. Each slide object should hav
 {
   "title": "Slide Title",
   "content": ["Bullet point 1", "Bullet point 2"],
-  "speakerNotes": "Detailed notes for the presenter",
+  "speakerNotes": "Detailed notes for the presenter that connect this slide to the previous one and set up the next one.",
   "imagePrompt": "A descriptive image prompt"
 }
 
