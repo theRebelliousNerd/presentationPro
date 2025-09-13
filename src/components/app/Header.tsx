@@ -15,9 +15,9 @@ export default function Header({ onReset }: HeaderProps) {
           <Image
             src="/logo.png"
             alt="Next-Gen Engineering and Research Development"
-            width={200}
-            height={48}
-            className="object-contain"
+            width={400}
+            height={100}
+            className="object-contain h-12 md:h-16 w-auto"
             priority
           />
           <div className="hidden md:block border-l border-muted-foreground/30 pl-4 ml-2">
