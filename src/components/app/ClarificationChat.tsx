@@ -4,10 +4,11 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription }
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, User, Bot, Loader2 } from 'lucide-react';
+import { Send, User, Bot, Loader2, Lightbulb } from 'lucide-react';
 import { getClarification } from '@/lib/actions';
 import { Presentation, ChatMessage } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { Progress } from '@/components/ui/progress';
 
 type ClarificationChatProps = {
   presentation: Presentation;
@@ -15,11 +16,22 @@ type ClarificationChatProps = {
   onClarificationComplete: (finalGoals: string) => void;
 };
 
+const CONTEXT_SUGGESTIONS = [
+  'Consider providing a company logo or brand colors.',
+  'Do you have any specific data or studies to include?',
+  'Are there key images or diagrams that should be in the presentation?',
+  'What is the key takeaway for the audience?',
+  'Is there a specific call to action?',
+  'Mention any important competitors or market context.',
+];
+
 export default function ClarificationChat({ presentation, setPresentation, onClarificationComplete }: ClarificationChatProps) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const [progress, setProgress] = useState(10);
+  const [suggestion, setSuggestion] = useState('');
 
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { chatHistory, initialInput } = presentation;
 
   const scrollToBottom = () => {
@@ -29,6 +41,20 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
   };
   
   useEffect(scrollToBottom, [chatHistory]);
+
+  useEffect(() => {
+    // Update progress based on chat length
+    const newProgress = Math.min(10 + chatHistory.length * 15, 85);
+    setProgress(newProgress);
+    
+    // Update suggestion
+    if (chatHistory.length < CONTEXT_SUGGESTIONS.length) {
+      setSuggestion(CONTEXT_SUGGESTIONS[chatHistory.length]);
+    } else {
+      setSuggestion(CONTEXT_SUGGESTIONS[CONTEXT_SUGGESTIONS.length - 1]);
+    }
+
+  }, [chatHistory]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,6 +73,7 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
       setPresentation(prev => ({...prev, chatHistory: [...newHistory, newAiMessage]}));
       
       if (response.finished) {
+        setProgress(100);
         onClarificationComplete(aiResponseContent);
       }
     } catch (error) {
@@ -59,14 +86,14 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
   };
 
   return (
-    <Card className="w-full max-w-3xl h-[80vh] flex flex-col shadow-2xl">
+    <Card className="w-full max-w-3xl h-[85vh] flex flex-col shadow-2xl">
       <CardHeader>
         <CardTitle className="font-headline text-3xl">Let's Refine Your Idea</CardTitle>
         <CardDescription>
           I'm your presentation strategist. Answer my questions to help me understand your goals.
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow overflow-hidden">
+      <CardContent className="flex-grow overflow-hidden flex flex-col gap-4">
         <ScrollArea className="h-full pr-4" ref={scrollAreaRef}>
           <div className="space-y-6">
             {chatHistory.map((message, index) => (
@@ -88,6 +115,19 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
             )}
           </div>
         </ScrollArea>
+        <div className="flex-shrink-0 pt-2">
+            <div className="space-y-2">
+                <div className="flex justify-between text-sm font-medium text-muted-foreground">
+                    <span>Context Meter</span>
+                    <span>{progress}% complete</span>
+                </div>
+                <Progress value={progress} className="w-full" />
+                <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
+                    <Lightbulb className="h-4 w-4 text-yellow-400" />
+                    <span><b>Suggestion:</b> {suggestion}</span>
+                </div>
+            </div>
+        </div>
       </CardContent>
       <CardFooter>
         <form onSubmit={handleSubmit} className="w-full flex items-center gap-2">
