@@ -13,7 +13,7 @@ export async function getClarification(
   history: ChatMessage[],
   initialInput: Presentation['initialInput']
 ) {
-  const initialPrompt = `Initial User Input:\nText: ${initialInput.text}\nAudience: ${initialInput.audience}\nLength: ${initialInput.length}\nFiles: ${initialInput.files.map(f => f.name).join(', ')}`;
+  const initialPrompt = `Initial User Input:\nText: ${initialInput.text}\nAudience: ${initialInput.audience}\nLength: ${initialInput.length}\nTone: ${initialInput.tone}\nMood: ${initialInput.mood}\nColor Scheme: ${initialInput.colorScheme}\nFiles: ${initialInput.files.map(f => f.name).join(', ')}`;
 
   const inputText = [
     initialPrompt,

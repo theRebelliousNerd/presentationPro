@@ -19,6 +19,9 @@ export type Presentation = {
     files: { name: string; dataUrl: string }[];
     length: string;
     audience: string;
+    tone: string;
+    mood: string;
+    colorScheme: string;
   };
   chatHistory: ChatMessage[];
   clarifiedGoals: string;

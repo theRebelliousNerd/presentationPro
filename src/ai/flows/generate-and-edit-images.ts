@@ -54,8 +54,11 @@ const generateAndEditImageFlow = ai.defineFlow(
       media = response.media;
     } else {
       const response = await ai.generate({
-        model: 'googleai/imagen-4.0-generate-001',
+        model: 'googleai/gemini-2.5-flash-image-preview',
         prompt: prompt,
+        config: {
+            responseModalities: ['TEXT', 'IMAGE'], // MUST provide both TEXT and IMAGE, IMAGE only won't work
+        }
       });
       media = response.media;
     }
