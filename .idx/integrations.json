@@ -1,1 +1,8 @@
-{}
+{
+  "secret:GOOGLE_GENAI_API_KEY": "AIzaSyAoA-ddyBawWgQqFEZ5hs8N4rWP3prpvQ0",
+  "frameworks": {
+    "firebase": {
+      "projectId": "studio-8474414315-9646e"
+    }
+  }
+}
