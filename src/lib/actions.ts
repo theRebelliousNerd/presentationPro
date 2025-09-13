@@ -25,6 +25,7 @@ Text: ${initialInput.text}
 Length: ${initialInput.length}
 Audience: ${initialInput.audience}
 Industry: ${initialInput.industry}
+Sub-Industry: ${initialInput.subIndustry}
 Tone (Formality): ${formality}
 Tone (Energy): ${energy}
 Graphic Style: ${initialInput.graphicStyle}

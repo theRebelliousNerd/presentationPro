@@ -21,6 +21,7 @@ export type Presentation = {
     length: string;
     audience: string;
     industry: string;
+    subIndustry: string;
     tone: { formality: number; energy: number };
     graphicStyle: string;
   };

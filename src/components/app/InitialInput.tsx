@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Slider } from '@/components/ui/slider';
+import { industries } from '@/lib/industries';
 
 type InitialInputProps = {
   onStart: (values: {
@@ -17,6 +18,7 @@ type InitialInputProps = {
     length: string;
     audience: string;
     industry: string;
+    subIndustry: string;
     tone: { formality: number; energy: number };
     graphicStyle: string;
   }) => void;
@@ -31,14 +33,27 @@ export default function InitialInput({ onStart }: InitialInputProps) {
   const [styleFiles, setStyleFiles] = useState<{ name: string; dataUrl: string }[]>([]);
   const [length, setLength] = useState('medium');
   const [audience, setAudience] = useState('general');
-  const [industry, setIndustry] = useState('technology');
+  const [industry, setIndustry] = useState('');
+  const [subIndustry, setSubIndustry] = useState('');
+  const [subIndustries, setSubIndustries] = useState<string[]>([]);
   const [tone, setTone] = useState({ formality: 2, energy: 2 });
   const [graphicStyle, setGraphicStyle] = useState('modern');
 
+  useEffect(() => {
+    const selectedIndustry = industries.find(i => i.name === industry);
+    if (selectedIndustry && selectedIndustry.subIndustries) {
+      setSubIndustries(selectedIndustry.subIndustries);
+      setSubIndustry(''); // Reset sub-industry when industry changes
+    } else {
+      setSubIndustries([]);
+      setSubIndustry('');
+    }
+  }, [industry]);
+  
   const isButtonDisabled = !text.trim() && files.length === 0;
 
   const handleSubmit = () => {
-    onStart({ text, files, length, audience, industry, tone, graphicStyle });
+    onStart({ text, files, length, audience, industry, subIndustry, tone, graphicStyle });
   }
 
   return (
@@ -90,17 +105,27 @@ export default function InitialInput({ onStart }: InitialInputProps) {
                     <SelectValue placeholder="Select industry" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="technology">Technology</SelectItem>
-                    <SelectItem value="healthcare">Healthcare</SelectItem>
-                    <SelectItem value="finance">Finance</SelectItem>
-                    <SelectItem value="education">Education</SelectItem>
-                    <SelectItem value="manufacturing">Manufacturing</SelectItem>
-                    <SelectItem value="retail">Retail</SelectItem>
-                    <SelectItem value="entertainment">Entertainment</SelectItem>
-                    <SelectItem value="non-profit">Non-Profit</SelectItem>
+                    {industries.map((ind) => (
+                      <SelectItem key={ind.name} value={ind.name}>{ind.name}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+              {subIndustries.length > 0 && (
+                <div>
+                  <Label htmlFor="sub-industry" className="text-xs text-muted-foreground">Sub-Industry</Label>
+                  <Select value={subIndustry} onValueChange={setSubIndustry}>
+                    <SelectTrigger id="sub-industry" className="w-full">
+                      <SelectValue placeholder="Select sub-industry" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {subIndustries.map((subInd) => (
+                        <SelectItem key={subInd} value={subInd}>{subInd}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div>
                 <Label htmlFor="graphic-style" className="text-xs text-muted-foreground">Graphic Style</Label>
                 <Select value={graphicStyle} onValueChange={setGraphicStyle}>
