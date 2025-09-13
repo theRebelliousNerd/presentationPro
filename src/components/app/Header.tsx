@@ -13,7 +13,7 @@ export default function Header({ onReset }: HeaderProps) {
       <div className="container mx-auto flex justify-between items-center">
         <div className="flex items-center gap-4">
           <Image
-            src="/logo.svg"
+            src="/logo.png"
             alt="Next-Gen Engineering and Research Development"
             width={200}
             height={48}
