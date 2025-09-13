@@ -26,17 +26,17 @@ export default function InitialInput({ onStart }: InitialInputProps) {
   const isButtonDisabled = !text.trim() && files.length === 0;
 
   return (
-    <Card className="w-full max-w-4xl shadow-2xl">
+    <Card className="w-full max-w-5xl shadow-2xl border-2 border-border/50">
       <CardHeader>
-        <CardTitle className="font-headline text-3xl">Create a New Presentation</CardTitle>
+        <CardTitle className="font-headline text-3xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">Create a New Presentation</CardTitle>
         <CardDescription>
           Start by pasting your script, notes, or any unstructured text. You can also upload supporting documents and images.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-8">
         <div className="space-y-2">
-            <Label>Presentation Parameters</Label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <Label className="text-base font-headline font-semibold text-foreground">Presentation Parameters</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4 bg-muted/20 rounded-lg border border-border/30">
               <div>
                 <Label htmlFor="length" className="text-xs text-muted-foreground">Length</Label>
                 <Select value={length} onValueChange={setLength}>
@@ -112,10 +112,10 @@ export default function InitialInput({ onStart }: InitialInputProps) {
         </div>
         <Separator />
          <div className="space-y-2">
-            <Label>Presentation Content</Label>
+            <Label className="text-base font-headline font-semibold text-foreground">Presentation Content</Label>
             <Textarea
               placeholder="Paste your presentation content here..."
-              className="min-h-[200px] text-base"
+              className="min-h-[200px] text-base p-4"
               value={text}
               onChange={(e) => setText(e.target.value)}
             />
@@ -126,7 +126,7 @@ export default function InitialInput({ onStart }: InitialInputProps) {
         </div>
         <Separator />
         <div className="space-y-2">
-            <Label>Style Guide (Optional)</Label>
+            <Label className="text-base font-headline font-semibold text-foreground">Style Guide (Optional)</Label>
              <FileDropzone 
               onFilesChange={setStyleFiles}
               acceptedFormats=".pdf, .png, .jpg, .jpeg"
@@ -136,11 +136,11 @@ export default function InitialInput({ onStart }: InitialInputProps) {
       <CardFooter>
         <Button
           size="lg"
-          className="w-full font-headline"
+          className="w-full font-headline text-base"
           disabled={isButtonDisabled}
           onClick={() => onStart(text, files, length, audience, tone, mood, colorScheme)}
         >
-          Analyze & Start
+          Start Creating
         </Button>
       </CardFooter>
     </Card>

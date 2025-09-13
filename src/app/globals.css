@@ -4,58 +4,83 @@
 
 @layer base {
   :root {
-    --background: 240 100% 97%;
-    --foreground: 212 43% 17%;
-    --card: 0 0% 100%;
-    --card-foreground: 212 43% 17%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 212 43% 17%;
-    --primary: 215 25% 61%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 75 10% 95%;
-    --secondary-foreground: 212 43% 17%;
-    --muted: 75 8% 92%;
-    --muted-foreground: 212 25% 45%;
-    --accent: 78 48% 54%;
-    --accent-foreground: 212 43% 17%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 215 10% 80%;
-    --input: 215 10% 90%;
-    --ring: 215 25% 61%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    --background: 220 26% 11%; /* #121822 - Even darker blue */
+    --foreground: 210 40% 98%; /* Almost white for high contrast */
+
+    --card: 220 26% 14%; /* #17202d - Dark card background */
+    --card-foreground: 210 40% 98%;
+
+    --popover: 220 26% 14%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 211 25% 40%; /* #556273 - Slate Blue */
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 100 45% 55%; /* #8ABF54 - Vibrant Green */
+    --secondary-foreground: 220 26% 11%;
+
+    --muted: 220 26% 20%; /* #242c3a */
+    --muted-foreground: 220 15% 65%; /* #939cac */
+
+    --accent: 100 45% 65%; /* #a2cf7a - Lighter green for accents */
+    --accent-foreground: 220 26% 11%;
+
+    --destructive: 0 72% 51%; /* #e53e3e */
+    --destructive-foreground: 210 40% 98%;
+
+    --warning: 38 92% 50%; /* #f9ac14 */
+    --success: 142 71% 45%; /* #28a745 */
+
+    --border: 220 26% 25%; /* #313b4e */
+    --input: 220 26% 20%;
+    --ring: 100 45% 55%; /* Vibrant Green for focus rings */
+
+    --chart-1: 100 45% 55%; /* Vibrant Green */
+    --chart-2: 211 25% 40%; /* Slate Blue */
+    --chart-3: 100 45% 65%; /* Lighter Green */
+    --chart-4: 211 25% 60%; /* Lighter Slate Blue */
+    --chart-5: 38 92% 50%; /* Warning Orange */
+    
     --radius: 0.5rem;
   }
- 
+
   .dark {
-    --background: 212 43% 17%; /* #172940 */
-    --foreground: 215 15% 85%;
-    --card: 212 43% 12%; /* A slightly lighter version of the background for cards */
-    --card-foreground: 215 15% 85%;
-    --popover: 212 43% 17%;
-    --popover-foreground: 215 15% 85%;
-    --primary: 211 14% 42%; /* #556273 */
-    --primary-foreground: 215 15% 95%;
-    --secondary: 215 28% 25%;
-    --secondary-foreground: 215 15% 85%;
-    --muted: 215 28% 25%;
-    --muted-foreground: 215 15% 65%;
-    --accent: 85 45% 54%; /* #8ABF54 */
-    --accent-foreground: 212 43% 17%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 215 28% 25%;
-    --input: 215 28% 25%;
-    --ring: 211 14% 62%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    --background: 220 26% 11%; /* #121822 - Even darker blue */
+    --foreground: 210 40% 98%; /* Almost white for high contrast */
+
+    --card: 220 26% 14%; /* #17202d - Dark card background */
+    --card-foreground: 210 40% 98%;
+
+    --popover: 220 26% 14%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 211 25% 40%; /* #556273 - Slate Blue */
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 100 45% 55%; /* #8ABF54 - Vibrant Green */
+    --secondary-foreground: 220 26% 11%;
+
+    --muted: 220 26% 20%; /* #242c3a */
+    --muted-foreground: 220 15% 65%; /* #939cac */
+
+    --accent: 100 45% 65%; /* #a2cf7a - Lighter green for accents */
+    --accent-foreground: 220 26% 11%;
+
+    --destructive: 0 72% 51%; /* #e53e3e */
+    --destructive-foreground: 210 40% 98%;
+
+    --warning: 38 92% 50%; /* #f9ac14 */
+    --success: 142 71% 45%; /* #28a745 */
+
+    --border: 220 26% 25%; /* #313b4e */
+    --input: 220 26% 20%;
+    --ring: 100 45% 55%; /* Vibrant Green for focus rings */
+
+    --chart-1: 100 45% 55%; /* Vibrant Green */
+    --chart-2: 211 25% 40%; /* Slate Blue */
+    --chart-3: 100 45% 65%; /* Lighter Green */
+    --chart-4: 211 25% 60%; /* Lighter Slate Blue */
+    --chart-5: 38 92% 50%; /* Warning Orange */
   }
 }
  
@@ -65,5 +90,62 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* Typography improvements */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-headline;
+  }
+
+  p, span, div {
+    @apply font-body;
+  }
+
+  /* Custom scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-background;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-secondary rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-primary;
+  }
+}
+
+@layer utilities {
+  /* Professional gradient backgrounds */
+  .gradient-primary {
+    @apply bg-gradient-to-br from-primary to-accent;
+  }
+
+  .gradient-secondary {
+    @apply bg-gradient-to-br from-secondary to-muted;
+  }
+
+  /* Smooth animations */
+  .animate-smooth {
+    @apply transition-all duration-300 ease-in-out;
+  }
+
+  /* Professional shadows */
+  .shadow-professional {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+
+  .shadow-professional-lg {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  }
+
+  /* Text selection styling */
+  ::selection {
+    @apply bg-primary/30 text-foreground;
   }
 }
