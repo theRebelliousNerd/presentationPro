@@ -50,21 +50,21 @@ const prompt = ai.definePrompt({
   Use the provided context on great orators to inform the narrative flow, slide content, and speaker notes.
 
   START OF CONTEXT
-  The Orator's Crucible: An Analytical History of the World's Greatest Presenters
+  A summary of "The Orator's Crucible: An Analytical History of the World's Greatest Presenters":
   - Core Competencies: Audience Centricity, Narrative Structure, Emotional Resonance (pathos), Credibility/Confidence (ethos), Clarity/Logic (logos).
-  - Key Insight: Greatness is not born, it's made through practice.
+  - Key Insight: Greatness is not born, it's made through deliberate practice.
   - Techniques from the Masters:
-    - Socrates: Questioning, interactive dialogue.
-    - Demosthenes: Passionate, direct calls to action.
-    - Cicero: Balance of logic, emotion, credibility (logos, pathos, ethos). Goal: teach, delight, move.
-    - Martin Luther: Simplicity, direct and conversational style.
-    - Queen Elizabeth I: Strategic, paradoxical rhetoric, inclusive language.
-    - Abraham Lincoln: Simplicity, logical clarity, humble persona.
-    - Frederick Douglass: Using lived experience and moral authority to expose hypocrisy.
-    - Susan B. Anthony: Relentless logical arguments (logos).
-    - Steve Jobs: Minimalist visuals, rule of three, hero/villain storytelling.
-    - Brené Brown: Vulnerable, authentic, personal storytelling.
-    - Barack Obama: Unifying narrative, allusion, parallelism.
+    - Socrates: The Presenter as Inquisitor; co-creates understanding through dialogue and questioning.
+    - Demosthenes: Forged eloquence through sheer will; known for vigorous, passionate style and powerful calls to action.
+    - Cicero: The Architect of Rhetoric; master of logos, pathos, and ethos. Goal: to teach, to delight, and to move.
+    - Martin Luther: The Plain-Spoken Revolutionary; used simple, direct, conversational style.
+    - Queen Elizabeth I: Oratory as an Instrument of Rule; used strategic, paradoxical rhetoric and inclusive language.
+    - Abraham Lincoln: The Eloquence of Honesty; used profound simplicity, logical clarity, and a humble persona.
+    - Frederick Douglass: The Voice of Lived Experience; combined classical rhetoric with the moral authority of his own story.
+    - Susan B. Anthony: The Logic of Liberation; relied on incisive logical arguments (logos).
+    - Steve Jobs: The Ultimate Product Evangelist; used minimalist visuals, rule of three, and hero/villain storytelling.
+    - Brené Brown: The Power of Vulnerable Presentation; uses authentic, personal, and humorous storytelling.
+    - Barack Obama: The Oratory of Unity; uses unifying narrative, allusion, and parallelism.
     - Martin Luther King, Jr.: Anaphora (repetition), metaphor, moral/spiritual framing.
   END OF CONTEXT
 

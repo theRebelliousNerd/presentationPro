@@ -44,47 +44,30 @@ const prompt = ai.definePrompt({
 
   Use the following context about what makes a great presentation to inform your outline structure.
   START OF CONTEXT
-  The Orator's Crucible: An Analytical History of the World's Greatest Presenters
-  Introduction: The Anatomy of Oratorical Excellence
-  The capacity to stand before an audience and, through the power of the spoken word, alter perspectives, inspire action, or reshape the course of history is one of humanity's most formidable skills. A synthesis of rhetorical theory and modern communication science reveals a set of core competencies:
-  - Audience Centricity: Analyze an audience—their beliefs, their fears, their needs—and meticulously tailor the message to resonate with them.
-  - Narrative Structure: "Tell a story" with a clear purpose, a logical flow, and a compelling call to action.
-  - Emotional Resonance (pathos): Forge a genuine connection, build rapport, and stir the emotions of the audience through expressive vocal tones, deliberate body language, and evocative storytelling.
-  - Credibility and Confidence (ethos): Project authority, authenticity, and control that engenders trust.
-  - Clarity and Logic (logos): A well-reasoned, content-rich argument that is both persuasive and easy to comprehend.
-
-  A central theme is that oratorical excellence is a craft forged in deliberate practice.
-
-  Classical world:
-  - Socrates: The Presenter as Inquisitor, using the Socratic Method (elenchus) to co-create understanding through dialogue and questioning.
-  - Demosthenes: Forged eloquence through sheer will, known for vigorous, passionate style, direct engagement, and powerful calls to action.
-  - Cicero: The Architect of Rhetoric, master of logos, pathos, and ethos, and systematized the five canons: Inventio (discovery), Dispositio (arrangement), Elocutio (style), Memoria (memorization), and Pronuntiatio (delivery). His goal: to teach, to delight, and to move.
-
-  Renaissance:
-  - Martin Luther: The Plain-Spoken Revolutionary, used simple, direct, conversational style to make complex theology accessible.
-  - Queen Elizabeth I: Oratory as an Instrument of Rule, used strategic, paradoxical rhetoric and inclusive language to legitimize her rule and project power.
-  - Leonardo da Vinci: Presented the unseen world through visual thinking (saper vedere), fusing art and science in his notebooks.
-
-  Industrial Revolution & Turn of the Century:
-  - Abraham Lincoln: The Eloquence of Honesty, used profound simplicity, logical clarity, biblical cadences, and a humble persona.
-  - Frederick Douglass: The Voice of Lived Experience, combined classical rhetoric with the moral authority of his own story to expose hypocrisy.
-  - Susan B. Anthony: The Logic of Liberation, relied on incisive logical arguments (logos) and constitutional syllogism.
-
-  Early Dot-Com Era:
-  - Steve Jobs: The Ultimate Product Evangelist, used minimalist visuals, the rule of three, and classic hero/villain storytelling in a conversational, passionate style.
-  - Bill Gates: The Evolution of a Pragmatic Presenter, evolved from data-heavy to simplified, problem-solution narratives.
-  - Larry Ellison: The Oracle of Confident Conviction, used confident poise and personal narrative to challenge the status quo.
-
-  Modern Masters:
-  - Brené Brown: The Power of Vulnerable Presentation, uses authentic, personal, and humorous storytelling to make academic research relatable.
-  - Barack Obama: The Oratory of Unity, uses epideictic (ceremonial) rhetoric, allusion, parallelism, and his own biography to build a unifying narrative.
-  - Malala Yousafzai: The Clarity of Courageous Conviction, uses her powerful personal story and simple, direct language to advocate for a universal cause.
+  A summary of "The Orator's Crucible: An Analytical History of the World's Greatest Presenters":
+  - Core Competencies: Audience Centricity, Narrative Structure, Emotional Resonance (pathos), Credibility/Confidence (ethos), Clarity/Logic (logos).
+  - Key Insight: Greatness is not born, it's made through deliberate practice.
+  - Techniques from the Masters:
+    - Socrates: The Presenter as Inquisitor; co-creates understanding through dialogue and questioning.
+    - Demosthenes: Forged eloquence through sheer will; known for vigorous, passionate style and powerful calls to action.
+    - Cicero: The Architect of Rhetoric; master of logos, pathos, and ethos. Goal: to teach, to delight, and to move.
+    - Martin Luther: The Plain-Spoken Revolutionary; used simple, direct, conversational style.
+    - Queen Elizabeth I: Oratory as an Instrument of Rule; used strategic, paradoxical rhetoric and inclusive language.
+    - Leonardo da Vinci: Presented the unseen world through visual thinking (saper vedere).
+    - Abraham Lincoln: The Eloquence of Honesty; used profound simplicity, logical clarity, and a humble persona.
+    - Frederick Douglass: The Voice of Lived Experience; combined classical rhetoric with the moral authority of his own story.
+    - Susan B. Anthony: The Logic of Liberation; relied on incisive logical arguments (logos) and constitutional syllogism.
+    - Steve Jobs: The Ultimate Product Evangelist; used minimalist visuals, the rule of three, and hero/villain storytelling.
+    - Bill Gates: The Evolution of a Pragmatic Presenter; evolved from data-heavy to simplified, problem-solution narratives.
+    - Brené Brown: The Power of Vulnerable Presentation; uses authentic, personal, and humorous storytelling.
+    - Barack Obama: The Oratory of Unity; uses unifying narrative, allusion, and parallelism.
+    - Malala Yousafzai: The Clarity of Courageous Conviction; uses her powerful personal story and simple, direct language.
   END OF CONTEXT
 
   Clarified Content: {{{clarifiedContent}}}
 
   Return a JSON array of strings, where each string is a slide title.
-  `, 
+  `,
 });
 
 const generatePresentationOutlineFlow = ai.defineFlow(
