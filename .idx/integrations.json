@@ -1,3 +1,6 @@
 {
+  "google.firebase": {
+    "projectId": "next-gen-presentations"
+  },
   "google.geminiApiKey": "AIzaSyAi_hopuJB0af_OUhiPxUsrVlY0PP3oi0c"
 }
