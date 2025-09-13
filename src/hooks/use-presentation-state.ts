@@ -33,7 +33,7 @@ const getInitialState = (id: string): {
 
 async function savePresentation(presentation: Presentation) {
   if (!db) {
-    console.error('Firestore is not initialized.');
+    console.warn('Firestore is not initialized yet. Skipping save.');
     return;
   }
   try {
@@ -55,7 +55,7 @@ export function usePresentationState(): {
 } {
   const [isLoaded, setIsLoaded] = useState(false);
   const [appState, setAppState] = useState<AppState>('initial');
-  const [presentation, setPresentation] = useState<Presentation>(getInitialState(nanoid()).presentation);
+  const [presentation, setPresentation] = useState<Presentation>(getInitialState('').presentation);
   const [presentationId, setPresentationId] = useState<string | null>(null);
 
   // Load presentation ID from localStorage or create a new one
@@ -71,29 +71,36 @@ export function usePresentationState(): {
   // Subscribe to Firestore for presentation updates
   useEffect(() => {
     if (presentationId && db) {
+      setIsLoaded(true); // Allow UI to render immediately
       const presRef = doc(db, 'presentations', presentationId);
       const unsubscribe = onSnapshot(presRef, (docSnap) => {
         if (docSnap.exists()) {
           const data = docSnap.data() as Presentation;
-          // Merge with initial state to ensure all fields are present
           const fullPresentation = { ...getInitialState(presentationId).presentation, ...data };
           setPresentation(fullPresentation);
-          const savedAppState = localStorage.getItem('appState');
-          setAppState((savedAppState as AppState) || 'initial');
+          const savedAppState = localStorage.getItem('appState') as AppState | null;
+          // Only set app state from localStorage if it's valid and we are in a consistent state
+          if (savedAppState && Object.keys(getInitialState('').presentation).includes(savedAppState)) {
+             setAppState(savedAppState);
+          } else {
+             setAppState(fullPresentation.slides.length > 0 ? 'editing' : (fullPresentation.clarifiedGoals ? 'approving' : (fullPresentation.chatHistory.length > 0 ? 'clarifying' : 'initial')));
+          }
+
         } else {
-          // If no doc, initialize a new one
+          // If no doc, initialize a new one and save it
           const initialState = getInitialState(presentationId);
           setPresentation(initialState.presentation);
           setAppState(initialState.appState);
+          savePresentation(initialState.presentation);
         }
-        setIsLoaded(true);
       });
       return () => unsubscribe();
     } else if (presentationId) {
-      // Handle case where db is not yet initialized
+      // Handle case where db is not yet initialized (e.g. server-side)
       const initialState = getInitialState(presentationId);
       setPresentation(initialState.presentation);
-      setAppState(initialState.appState);
+      const savedAppState = typeof window !== 'undefined' ? localStorage.getItem('appState') as AppState : 'initial';
+      setAppState(savedAppState || 'initial');
       setIsLoaded(true);
     }
   }, [presentationId]);
@@ -108,21 +115,24 @@ export function usePresentationState(): {
   
   // Save app state to localStorage
   useEffect(() => {
-    if(isLoaded) {
+    if(isLoaded && appState) {
       localStorage.setItem('appState', appState);
     }
   }, [appState, isLoaded]);
 
   const resetState = useCallback(() => {
+    setIsLoaded(false);
     const newId = nanoid();
     localStorage.setItem('presentationId', newId);
-    setPresentationId(newId);
     const initialState = getInitialState(newId);
-    setAppState(initialState.appState);
+    savePresentation(presentation); // Save old presentation one last time
     setPresentation(initialState.presentation);
+    setAppState(initialState.appState);
+    setPresentationId(newId);
     savePresentation(initialState.presentation); // Save the new blank state
     localStorage.setItem('appState', 'initial');
-  }, []);
+    setIsLoaded(true);
+  }, [presentation]);
   
   const uploadFile = async (file: File) => {
     if (!storage || !presentation.id) {
@@ -131,8 +141,8 @@ export function usePresentationState(): {
     const storageRef = ref(storage, `presentations/${presentation.id}/${file.name}`);
     await uploadBytes(storageRef, file);
     const downloadURL = await getDownloadURL(storageRef);
-    // Convert to dataUrl for consistency with other parts of the app for now
-    // In a future step we can refactor to use the URL directly
+    
+    // Convert to dataUrl for consistency for now
     const response = await fetch(downloadURL);
     const blob = await response.blob();
     const dataUrl = await new Promise<string>((resolve) => {
