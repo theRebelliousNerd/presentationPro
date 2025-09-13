@@ -67,7 +67,7 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
     if (presentation.id) { // Only run if presentation is loaded
       getInitialMessage();
     }
-  }, [presentation.id]);
+  }, [presentation.id, setPresentation, initialInput]);
 
   useEffect(() => {
     const newProgress = Math.min(10 + chatHistory.length * 15, 85);
@@ -205,7 +205,7 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
             autoComplete="off"
           />
           <Button type="submit" disabled={isLoading || (!input.trim() && newRawFiles.length === 0)}>
-            {isLoading && newRawFiles.length > 0 ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            {isLoading && newRawFiles.length === 0 ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </form>
       </CardFooter>
