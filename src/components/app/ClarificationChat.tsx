@@ -45,6 +45,27 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
   useEffect(scrollToBottom, [chatHistory]);
 
   useEffect(() => {
+    const getInitialMessage = async () => {
+      if (chatHistory.length === 0) {
+        setIsLoading(true);
+        try {
+          const response = await getClarification([], initialInput, []);
+          const aiResponseContent = response.refinedGoals.replace('---FINISHED---', '').trim();
+          const newAiMessage: ChatMessage = { role: 'model', content: aiResponseContent };
+          setPresentation(prev => ({ ...prev, chatHistory: [newAiMessage] }));
+        } catch (error) {
+          console.error("Failed to get initial message:", error);
+          const errorMessage: ChatMessage = { role: 'model', content: 'Sorry, I encountered an error starting the chat. Please try refreshing.' };
+          setPresentation(prev => ({ ...prev, chatHistory: [errorMessage] }));
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+    getInitialMessage();
+  }, []);
+
+  useEffect(() => {
     // Update progress based on chat length
     const newProgress = Math.min(10 + chatHistory.length * 15, 85);
     setProgress(newProgress);
