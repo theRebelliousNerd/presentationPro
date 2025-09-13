@@ -19,14 +19,18 @@ export default function FileDropzone({ onFilesChange, acceptedFormats }: FileDro
       const validFiles = Array.from(newFiles);
       const allFiles = [...files];
 
+      let processedCount = 0;
       validFiles.forEach(file => {
         const reader = new FileReader();
         reader.onload = (e) => {
           const dataUrl = e.target?.result as string;
           if (dataUrl) {
-            const updatedFiles = [...allFiles, { name: file.name, dataUrl }];
-            setFiles(updatedFiles);
-            onFilesChange(updatedFiles);
+            allFiles.push({ name: file.name, dataUrl });
+          }
+          processedCount++;
+          if (processedCount === validFiles.length) {
+             setFiles(allFiles);
+             onFilesChange(allFiles);
           }
         };
         reader.readAsDataURL(file);
@@ -34,7 +38,7 @@ export default function FileDropzone({ onFilesChange, acceptedFormats }: FileDro
     },
     [files, onFilesChange]
   );
-
+  
   const handleDragEnter = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -71,7 +75,7 @@ export default function FileDropzone({ onFilesChange, acceptedFormats }: FileDro
     <div className="w-full">
       <div
         className={cn(
-          "border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors duration-300",
+          "border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors duration-300",
           isDragging ? "border-primary bg-accent" : "border-border hover:border-primary/50"
         )}
         onDragEnter={handleDragEnter}
@@ -89,23 +93,23 @@ export default function FileDropzone({ onFilesChange, acceptedFormats }: FileDro
           accept={acceptedFormats}
         />
         <div className="flex flex-col items-center gap-2 text-muted-foreground">
-          <UploadCloud className="w-12 h-12" />
+          <UploadCloud className="w-10 h-10" />
           <p className="font-semibold">Drag & drop files here, or click to select</p>
           <p className="text-xs">{acceptedFormats}</p>
         </div>
       </div>
       {files.length > 0 && (
-        <div className="mt-4 space-y-2">
-          <h4 className="font-semibold">Uploaded Files:</h4>
-          <ul className="space-y-2">
+        <div className="mt-3 space-y-2">
+          <h4 className="font-semibold text-sm">New files to upload:</h4>
+          <ul className="space-y-1">
             {files.map((file, index) => (
-              <li key={index} className="flex items-center justify-between bg-secondary p-2 rounded-md text-sm">
+              <li key={index} className="flex items-center justify-between bg-secondary p-1.5 rounded-md text-xs">
                 <div className="flex items-center gap-2">
                   <FileIcon className="h-4 w-4 text-muted-foreground" />
                   <span className="font-mono">{file.name}</span>
                 </div>
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleRemoveFile(index)}>
-                  <X className="h-4 w-4" />
+                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleRemoveFile(index)}>
+                  <X className="h-3 w-3" />
                 </Button>
               </li>
             ))}

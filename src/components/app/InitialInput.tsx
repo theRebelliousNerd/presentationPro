@@ -113,7 +113,7 @@ export default function InitialInput({ onStart }: InitialInputProps) {
         />
         <FileDropzone 
           onFilesChange={setFiles}
-          acceptedFormats=".pdf, .docx, .md, .txt, .png, .jpg, .jpeg"
+          acceptedFormats=".pdf, .docx, .md, .txt, .png, .jpg, .jpeg, .csv, .xls, .xlsx"
         />
       </CardContent>
       <CardFooter>

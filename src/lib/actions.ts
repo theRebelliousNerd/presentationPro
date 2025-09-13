@@ -11,7 +11,8 @@ import type { GenerateSlideContentInput } from '@/ai/flows/generate-slide-conten
 
 export async function getClarification(
   history: ChatMessage[],
-  initialInput: Presentation['initialInput']
+  initialInput: Presentation['initialInput'],
+  newFiles: { name: string; dataUrl: string }[] = []
 ) {
   const initialPrompt = `Initial User Input:\nText: ${initialInput.text}\nAudience: ${initialInput.audience}\nLength: ${initialInput.length}\nTone: ${initialInput.tone}\nMood: ${initialInput.mood}\nColor Scheme: ${initialInput.colorScheme}\nFiles: ${initialInput.files.map(f => f.name).join(', ')}`;
 
@@ -20,7 +21,8 @@ export async function getClarification(
     ...history.map(m => `${m.role}: ${m.content}`)
   ].join('\n\n');
   
-  const uploadedFiles = initialInput.files.map(f => f.dataUrl);
+  const allFiles = [...initialInput.files, ...newFiles];
+  const uploadedFiles = allFiles.map(f => f.dataUrl);
 
   return await refinePresentationGoals({ inputText, uploadedFiles });
 }

@@ -4,11 +4,12 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription }
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, User, Bot, Loader2, Lightbulb } from 'lucide-react';
+import { Send, User, Bot, Loader2, Lightbulb, Paperclip } from 'lucide-react';
 import { getClarification } from '@/lib/actions';
 import { Presentation, ChatMessage } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
+import FileDropzone from './FileDropzone';
 
 type ClarificationChatProps = {
   presentation: Presentation;
@@ -27,6 +28,7 @@ const CONTEXT_SUGGESTIONS = [
 
 export default function ClarificationChat({ presentation, setPresentation, onClarificationComplete }: ClarificationChatProps) {
   const [input, setInput] = useState('');
+  const [newFiles, setNewFiles] = useState<{ name: string; dataUrl: string }[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(10);
   const [suggestion, setSuggestion] = useState('');
@@ -58,19 +60,36 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    if ((!input.trim() && newFiles.length === 0) || isLoading) return;
 
-    const newUserMessage: ChatMessage = { role: 'user', content: input };
+    let messageContent = input;
+    if (newFiles.length > 0) {
+      const fileNames = newFiles.map(f => f.name).join(', ');
+      messageContent += `\n\n(Attached files: ${fileNames})`;
+    }
+
+    const newUserMessage: ChatMessage = { role: 'user', content: messageContent.trim() };
     const newHistory = [...chatHistory, newUserMessage];
     setPresentation(prev => ({...prev, chatHistory: newHistory}));
     setInput('');
+    setNewFiles([]); // Clear files after sending
     setIsLoading(true);
 
     try {
-      const response = await getClarification(newHistory, initialInput);
+      // We pass the new files along with the history
+      const response = await getClarification(newHistory, initialInput, newFiles);
       const aiResponseContent = response.refinedGoals.replace('---FINISHED---', '').trim();
       const newAiMessage: ChatMessage = { role: 'model', content: aiResponseContent };
-      setPresentation(prev => ({...prev, chatHistory: [...newHistory, newAiMessage]}));
+      
+      // We also add the newly uploaded files to the permanent presentation state
+      setPresentation(prev => ({
+        ...prev, 
+        chatHistory: [...newHistory, newAiMessage],
+        initialInput: {
+          ...prev.initialInput,
+          files: [...prev.initialInput.files, ...newFiles]
+        }
+      }));
       
       if (response.finished) {
         setProgress(100);
@@ -90,7 +109,7 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
       <CardHeader>
         <CardTitle className="font-headline text-3xl">Let's Refine Your Idea</CardTitle>
         <CardDescription>
-          I'm your presentation strategist. Answer my questions to help me understand your goals.
+          I'm your presentation strategist. Answer my questions to help me understand your goals. You can also add more files.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex-grow overflow-hidden flex flex-col gap-4">
@@ -115,7 +134,11 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
             )}
           </div>
         </ScrollArea>
-        <div className="flex-shrink-0 pt-2">
+        <div className="flex-shrink-0 pt-2 space-y-4">
+            <FileDropzone 
+              onFilesChange={setNewFiles}
+              acceptedFormats=".pdf, .docx, .md, .txt, .png, .jpg, .jpeg, .csv, .xls, .xlsx"
+            />
             <div className="space-y-2">
                 <div className="flex justify-between text-sm font-medium text-muted-foreground">
                     <span>Context Meter</span>
@@ -134,11 +157,11 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message..."
+            placeholder="Type your message or add files above..."
             disabled={isLoading}
             autoComplete="off"
           />
-          <Button type="submit" disabled={isLoading || !input.trim()}>
+          <Button type="submit" disabled={isLoading || (!input.trim() && newFiles.length === 0)}>
             <Send className="h-4 w-4" />
           </Button>
         </form>
