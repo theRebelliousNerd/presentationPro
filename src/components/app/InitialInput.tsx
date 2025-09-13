@@ -61,6 +61,9 @@ export default function InitialInput({ onStart }: InitialInputProps) {
                     <SelectItem value="technical">Technical</SelectItem>
                     <SelectItem value="executive">Executive</SelectItem>
                     <SelectItem value="sales">Sales</SelectItem>
+                    <SelectItem value="investors">Investors</SelectItem>
+                    <SelectItem value="students">Students</SelectItem>
+                    <SelectItem value="internal-team">Internal Team</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
