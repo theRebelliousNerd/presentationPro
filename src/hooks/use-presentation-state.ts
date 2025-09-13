@@ -8,7 +8,7 @@ const getInitialState = (): {
 } => ({
   appState: 'initial',
   presentation: {
-    initialInput: { text: '', files: [] },
+    initialInput: { text: '', files: [], length: 'medium', audience: 'general' },
     chatHistory: [],
     clarifiedGoals: '',
     outline: [],
@@ -38,7 +38,9 @@ export function usePresentationState(): {
           JSON.parse(savedState);
         if (savedAppState && savedPresentation) {
           setAppState(savedAppState);
-          setPresentation(savedPresentation);
+          // Ensure new fields have default values if not in saved state
+          const fullPresentation = { ...getInitialState().presentation, ...savedPresentation };
+          setPresentation(fullPresentation);
         }
       }
     } catch (error) {

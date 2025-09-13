@@ -6,14 +6,14 @@ import { generateSlideContent as generateSlideContentFlow } from '@/ai/flows/gen
 import { generateAndEditImage as generateAndEditImageFlow } from '@/ai/flows/generate-and-edit-images';
 import { rephraseSpeakerNotes as rephraseSpeakerNotesFlow } from '@/ai/flows/rephrase-speaker-notes';
 
-import type { ChatMessage } from './types';
+import type { ChatMessage, Presentation } from './types';
 import type { GenerateSlideContentInput } from '@/ai/flows/generate-slide-content';
 
 export async function getClarification(
   history: ChatMessage[],
-  initialInput: { text: string; files: { name: string; dataUrl: string }[] }
+  initialInput: Presentation['initialInput']
 ) {
-  const initialPrompt = `Initial User Input:\nText: ${initialInput.text}\nFiles: ${initialInput.files.map(f => f.name).join(', ')}`;
+  const initialPrompt = `Initial User Input:\nText: ${initialInput.text}\nAudience: ${initialInput.audience}\nLength: ${initialInput.length}\nFiles: ${initialInput.files.map(f => f.name).join(', ')}`;
 
   const inputText = [
     initialPrompt,

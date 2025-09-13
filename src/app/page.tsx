@@ -22,10 +22,10 @@ export default function Home() {
     resetState,
   } = usePresentationState();
 
-  const handleStartClarifying = (text: string, files: { name: string; dataUrl: string }[]) => {
+  const handleStartClarifying = (text: string, files: { name: string; dataUrl: string }[], length: string, audience: string) => {
     setPresentation((prev) => ({
       ...prev,
-      initialInput: { text, files },
+      initialInput: { text, files, length, audience },
     }));
     setAppState('clarifying');
   };

@@ -17,6 +17,8 @@ export type Presentation = {
   initialInput: {
     text: string;
     files: { name: string; dataUrl: string }[];
+    length: string;
+    audience: string;
   };
   chatHistory: ChatMessage[];
   clarifiedGoals: string;
