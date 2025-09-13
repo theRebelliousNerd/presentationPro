@@ -22,10 +22,18 @@ export default function Home() {
     resetState,
   } = usePresentationState();
 
-  const handleStartClarifying = (text: string, files: { name: string; dataUrl: string }[], length: string, audience: string, tone: string, mood: string, colorScheme: string) => {
+  const handleStartClarifying = (values: {
+    text: string;
+    files: { name: string; dataUrl: string }[];
+    length: string;
+    audience: string;
+    industry: string;
+    tone: { formality: number; energy: number };
+    graphicStyle: string;
+  }) => {
     setPresentation((prev) => ({
       ...prev,
-      initialInput: { text, files, length, audience, tone, mood, colorScheme },
+      initialInput: { ...prev.initialInput, ...values },
     }));
     setAppState('clarifying');
   };

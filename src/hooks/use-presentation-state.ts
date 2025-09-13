@@ -8,7 +8,15 @@ const getInitialState = (): {
 } => ({
   appState: 'initial',
   presentation: {
-    initialInput: { text: '', files: [], length: 'medium', audience: 'general', tone: 'educational', mood: 'neutral', colorScheme: 'default' },
+    initialInput: {
+      text: '',
+      files: [],
+      length: 'medium',
+      audience: 'general',
+      industry: 'technology',
+      tone: { formality: 2, energy: 2 },
+      graphicStyle: 'modern',
+    },
     chatHistory: [],
     clarifiedGoals: '',
     outline: [],

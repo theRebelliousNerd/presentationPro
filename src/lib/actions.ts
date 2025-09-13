@@ -9,12 +9,26 @@ import { rephraseSpeakerNotes as rephraseSpeakerNotesFlow } from '@/ai/flows/rep
 import type { ChatMessage, Presentation } from './types';
 import type { GenerateSlideContentInput } from '@/ai/flows/generate-slide-content';
 
+const TONE_LABELS = ['Very Casual', 'Casual', 'Neutral', 'Formal', 'Very Formal'];
+const ENERGY_LABELS = ['Very Low', 'Low', 'Neutral', 'High', 'Very High'];
+
 export async function getClarification(
   history: ChatMessage[],
   initialInput: Presentation['initialInput'],
   newFiles: { name: string; dataUrl: string }[] = []
 ) {
-  const initialPrompt = `Initial User Input:\nText: ${initialInput.text}\nAudience: ${initialInput.audience}\nLength: ${initialInput.length}\nTone: ${initialInput.tone}\nMood: ${initialInput.mood}\nColor Scheme: ${initialInput.colorScheme}\nFiles: ${initialInput.files.map(f => f.name).join(', ')}`;
+  const formality = TONE_LABELS[initialInput.tone.formality];
+  const energy = ENERGY_LABELS[initialInput.tone.energy];
+
+  const initialPrompt = `Initial User Input:
+Text: ${initialInput.text}
+Length: ${initialInput.length}
+Audience: ${initialInput.audience}
+Industry: ${initialInput.industry}
+Tone (Formality): ${formality}
+Tone (Energy): ${energy}
+Graphic Style: ${initialInput.graphicStyle}
+Files: ${initialInput.files.map(f => f.name).join(', ')}`;
 
   const inputText = [
     initialPrompt,
