@@ -4,7 +4,9 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription }
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getPresentationOutline } from '@/lib/actions';
-import { Check, ArrowLeft } from 'lucide-react';
+import { addUsage, estimateTokens } from '@/lib/token-meter';
+import { Check, ArrowLeft, ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 
 type OutlineApprovalProps = {
   clarifiedGoals: string;
@@ -20,8 +22,13 @@ export default function OutlineApproval({ clarifiedGoals, onApprove, onGoBack }:
   useEffect(() => {
     const fetchOutline = async () => {
       try {
+        if (clarifiedGoals) {
+          addUsage({ model: 'gemini-2.5-flash', kind: 'prompt', tokens: estimateTokens(clarifiedGoals), at: Date.now() } as any);
+        }
         const response = await getPresentationOutline(clarifiedGoals);
         setOutline(response.slideTitles);
+        const outText = response.slideTitles.join('\n');
+        addUsage({ model: 'gemini-2.5-flash', kind: 'completion', tokens: estimateTokens(outText), at: Date.now() } as any);
       } catch (err) {
         setError('Failed to generate an outline. Please try going back and refining your goals.');
         console.error(err);
@@ -37,7 +44,7 @@ export default function OutlineApproval({ clarifiedGoals, onApprove, onGoBack }:
       <CardHeader>
         <CardTitle className="font-headline text-3xl">Proposed Outline</CardTitle>
         <CardDescription>
-          Here is the slide-by-slide structure I've generated based on our conversation.
+          Review and edit the slide-by-slide structure before generating content.
         </CardDescription>
       </CardHeader>
       <CardContent className="min-h-[250px]">
@@ -48,20 +55,57 @@ export default function OutlineApproval({ clarifiedGoals, onApprove, onGoBack }:
         )}
         {error && <p className="text-destructive">{error}</p>}
         {outline && (
-          <ol className="space-y-3 list-decimal list-inside">
+          <div className="space-y-3">
             {outline.map((title, index) => (
-              <li key={index} className="p-3 bg-muted rounded-md text-foreground/90">
-                {title}
-              </li>
+              <div key={index} className="p-3 bg-muted rounded-md grid grid-cols-[1fr_auto] gap-2 items-center">
+                <Input
+                  value={title}
+                  onChange={(e) => {
+                    const newOutline = [...outline];
+                    newOutline[index] = e.target.value;
+                    setOutline(newOutline);
+                  }}
+                  className="bg-background"
+                />
+                <div className="flex gap-1">
+                  <Button variant="outline" size="icon" disabled={index===0} onClick={() => {
+                    const newOutline = [...outline];
+                    const [item] = newOutline.splice(index,1);
+                    newOutline.splice(index-1,0,item);
+                    setOutline(newOutline);
+                  }}>
+                    <ArrowUp className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="icon" disabled={index===outline.length-1} onClick={() => {
+                    const newOutline = [...outline];
+                    const [item] = newOutline.splice(index,1);
+                    newOutline.splice(index+1,0,item);
+                    setOutline(newOutline);
+                  }}>
+                    <ArrowDown className="h-4 w-4" />
+                  </Button>
+                  <Button variant="destructive" size="icon" onClick={() => {
+                    const newOutline = outline.filter((_,i)=>i!==index);
+                    setOutline(newOutline);
+                  }}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
             ))}
-          </ol>
+            <div className="flex justify-between pt-2">
+              <Button variant="outline" onClick={() => setOutline([...(outline||[]), 'New Slide'] )}>
+                <Plus className="mr-2 h-4 w-4" /> Add Slide
+              </Button>
+            </div>
+          </div>
         )}
       </CardContent>
       <CardFooter className="flex flex-col sm:flex-row gap-4">
         <Button variant="outline" onClick={onGoBack} className="w-full sm:w-auto">
           <ArrowLeft className="mr-2 h-4 w-4" /> Go Back & Edit
         </Button>
-        <Button onClick={() => outline && onApprove(outline)} disabled={!outline || isLoading} className="w-full sm:w-auto flex-grow">
+        <Button onClick={() => outline && onApprove(outline.filter(t=>t.trim().length>0))} disabled={!outline || outline.length===0 || isLoading} className="w-full sm:w-auto flex-grow">
           <Check className="mr-2 h-4 w-4" /> Looks Good, Generate Slides
         </Button>
       </CardFooter>

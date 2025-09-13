@@ -10,12 +10,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Slider } from '@/components/ui/slider';
 import { industries } from '@/lib/industries';
+import type { UploadedFileRef } from '@/lib/types';
+import { Loader2 } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 
 type InitialInputProps = {
   onStart: (values: {
     text: string;
-    files: { name: string; dataUrl: string }[];
-    styleFiles: { name: string; dataUrl: string }[];
+    files: UploadedFileRef[];
+    styleFiles: UploadedFileRef[];
     length: string;
     audience: string;
     industry: string;
@@ -23,12 +26,13 @@ type InitialInputProps = {
     tone: { formality: number; energy: number };
     graphicStyle: string;
   }) => void;
+  uploadFile: (file: File) => Promise<UploadedFileRef>;
 };
 
 const TONE_LABELS = ['Very Casual', 'Casual', 'Neutral', 'Formal', 'Very Formal'];
 const ENERGY_LABELS = ['Very Low', 'Low', 'Neutral', 'High', 'Very High'];
 
-export default function InitialInput({ onStart }: InitialInputProps) {
+export default function InitialInput({ onStart, uploadFile }: InitialInputProps) {
   const [text, setText] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [styleFiles, setStyleFiles] = useState<File[]>([]);
@@ -39,6 +43,7 @@ export default function InitialInput({ onStart }: InitialInputProps) {
   const [subIndustries, setSubIndustries] = useState<string[]>([]);
   const [tone, setTone] = useState({ formality: 2, energy: 2 });
   const [graphicStyle, setGraphicStyle] = useState('modern');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const selectedIndustry = industries.find(i => i.name === industry);
@@ -53,19 +58,29 @@ export default function InitialInput({ onStart }: InitialInputProps) {
   
   const isButtonDisabled = !text.trim() && files.length === 0;
 
-  const fileToDataUrl = (file: File): Promise<{ name: string; dataUrl: string }> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = event => resolve({ name: file.name, dataUrl: event.target?.result as string });
-      reader.onerror = error => reject(error);
-      reader.readAsDataURL(file);
-    });
-  }
-
   const handleSubmit = async () => {
-    const contentFilesData = await Promise.all(files.map(fileToDataUrl));
-    const styleFilesData = await Promise.all(styleFiles.map(fileToDataUrl));
-    onStart({ text, files: contentFilesData, styleFiles: styleFilesData, length, audience, industry, subIndustry, tone, graphicStyle });
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    let contentFilesData: UploadedFileRef[] = [];
+    let styleFilesData: UploadedFileRef[] = [];
+    try {
+      if (files.length > 0) {
+        contentFilesData = await Promise.all(files.map(uploadFile));
+      }
+      if (styleFiles.length > 0) {
+        styleFilesData = await Promise.all(styleFiles.map(uploadFile));
+      }
+    } catch (err) {
+      console.error('File upload failed, proceeding without files', err);
+      toast({
+        title: 'Some files failed to upload',
+        description: 'Continuing without those files. You can add them later in chat.',
+        variant: 'destructive',
+      });
+    } finally {
+      onStart({ text, files: contentFilesData, styleFiles: styleFilesData, length, audience, industry, subIndustry, tone, graphicStyle });
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -207,10 +222,10 @@ export default function InitialInput({ onStart }: InitialInputProps) {
         <Button
           size="lg"
           className="w-full font-headline text-base"
-          disabled={isButtonDisabled}
+          disabled={isButtonDisabled || isSubmitting}
           onClick={handleSubmit}
         >
-          Start Creating
+          {isSubmitting ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Preparing...</>) : 'Start Creating'}
         </Button>
       </CardFooter>
     </Card>

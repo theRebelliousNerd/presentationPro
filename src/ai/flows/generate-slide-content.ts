@@ -15,6 +15,26 @@ const GenerateSlideContentInputSchema = z.object({
   outline: z
     .array(z.string())
     .describe('An array of slide titles representing the presentation outline.'),
+  assets: z
+    .array(
+      z.object({
+        name: z.string(),
+        url: z.string(),
+        kind: z.enum(['image', 'document', 'other']).optional(),
+      })
+    )
+    .optional()
+    .describe('Uploaded user assets (documents, images) to use for context or slide media.'),
+  existing: z
+    .array(
+      z.object({
+        title: z.string(),
+        content: z.array(z.string()).optional(),
+        speakerNotes: z.string().optional(),
+      })
+    )
+    .optional()
+    .describe('Existing slide content to improve or refine'),
 });
 export type GenerateSlideContentInput = z.infer<typeof GenerateSlideContentInputSchema>;
 
@@ -25,12 +45,13 @@ const SlideSchema = z.object({
     .min(1)
     .max(4)
     .describe('An array of 1-4 strings for bullet points on the slide.'),
-  speakerNotes: z.string().describe('Detailed speaker notes for the slide that create a narrative flow.'),
+  speakerNotes: z.string().describe('Speaker notes in short paragraphs and concise bullet points to guide the presenter.'),
   imagePrompt: z
     .string()
     .describe(
       'A detailed, descriptive image prompt suitable for an image generation model.'
     ),
+  useAssetImageUrl: z.string().nullable().optional().describe('If provided, use this uploaded asset URL as the slide background image instead of generating one.'),
 });
 
 const GenerateSlideContentOutputSchema = z.array(SlideSchema).describe('An array of slide objects.');
@@ -48,6 +69,12 @@ const prompt = ai.definePrompt({
   output: {schema: GenerateSlideContentOutputSchema},
   prompt: `You are an expert presentation creator and storyteller. Given the outline below, create content for each slide.
   Use the provided context on great orators to inform the narrative flow, slide content, and speaker notes.
+
+  You are also given a list of uploaded user assets (documents, images). Use these as primary context and cite them logically when appropriate. If an uploaded image is suitable as the main visual for a slide, set useAssetImageUrl to that image URL and provide a modest imagePrompt that complements it; otherwise, leave useAssetImageUrl null and provide a strong imagePrompt for generation.
+
+  Speaker notes should be concise: a few bullets and short guiding paragraphs, focused on cues, not scripts.
+
+  If existing slide content is provided, improve and refine it, keeping the same intent while enhancing clarity and narrative flow. Preserve any critical facts and use assets where appropriate.
 
   START OF CONTEXT
   The Orator's Crucible: An Analytical History of the World's Greatest Presenters

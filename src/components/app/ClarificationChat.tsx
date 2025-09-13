@@ -6,17 +6,19 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, User, Bot, Loader2, Lightbulb } from 'lucide-react';
 import { getClarification } from '@/lib/actions';
-import { Presentation, ChatMessage } from '@/lib/types';
+import { Presentation, ChatMessage, UploadedFileRef } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
 import FileDropzone from './FileDropzone';
 import { Skeleton } from '@/components/ui/skeleton';
+import { nanoid } from 'nanoid';
+import { addUsage, estimateTokens } from '@/lib/token-meter';
 
 type ClarificationChatProps = {
   presentation: Presentation;
   setPresentation: Dispatch<SetStateAction<Presentation>>;
   onClarificationComplete: (finalGoals: string) => void;
-  uploadFile: (file: File) => Promise<{ name: string; dataUrl: string; }>;
+  uploadFile: (file: File) => Promise<UploadedFileRef>;
 };
 
 const CONTEXT_SUGGESTIONS = [
@@ -52,12 +54,12 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
         setIsLoading(true);
         try {
           const response = await getClarification([], initialInput, []);
-          const aiResponseContent = response.refinedGoals.replace('---FINISHED---', '').trim();
-          const newAiMessage: ChatMessage = { role: 'model', content: aiResponseContent };
+          const aiResponseContent = response.refinedGoals.trim();
+          const newAiMessage: ChatMessage = { id: nanoid(), role: 'model', content: aiResponseContent, createdAt: Date.now() };
           setPresentation(prev => ({ ...prev, chatHistory: [newAiMessage] }));
         } catch (error) {
           console.error("Failed to get initial message:", error);
-          const errorMessage: ChatMessage = { role: 'model', content: 'Sorry, I encountered an error starting the chat. Please try refreshing.' };
+          const errorMessage: ChatMessage = { id: nanoid(), role: 'model', content: 'Sorry, I encountered an error starting the chat. Please try refreshing.', createdAt: Date.now() };
           setPresentation(prev => ({ ...prev, chatHistory: [errorMessage] }));
         } finally {
           setIsLoading(false);
@@ -88,7 +90,7 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
     setIsLoading(true);
 
     let messageContent = input;
-    const uploadedFileInfos: { name: string; dataUrl: string; }[] = [];
+    const uploadedFileInfos: UploadedFileRef[] = [];
 
     if (newRawFiles.length > 0) {
       const fileNames = newRawFiles.map(f => f.name).join(', ');
@@ -106,17 +108,21 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
       }
     }
 
-    const newUserMessage: ChatMessage = { role: 'user', content: messageContent.trim() };
+    const newUserMessage: ChatMessage = { id: nanoid(), role: 'user', content: messageContent.trim(), createdAt: Date.now() };
     const newHistory = [...chatHistory, newUserMessage];
     setPresentation(prev => ({...prev, chatHistory: newHistory}));
     setInput('');
     setNewRawFiles([]);
     
     try {
+      // Estimate prompt tokens (user message only; system/context not included here)
+      if (messageContent.trim()) {
+        addUsage({ model: 'gemini-2.5-flash', kind: 'prompt', tokens: estimateTokens(messageContent) , at: Date.now() } as any);
+      }
       const response = await getClarification(newHistory, initialInput, uploadedFileInfos);
-      const aiResponseContent = response.refinedGoals.replace('---FINISHED---', '').trim();
-      const newAiMessage: ChatMessage = { role: 'model', content: aiResponseContent };
-      
+      const aiResponseContent = response.refinedGoals.trim();
+      const newAiMessage: ChatMessage = { id: nanoid(), role: 'model', content: aiResponseContent, createdAt: Date.now() };
+
       setPresentation(prev => ({
         ...prev, 
         chatHistory: [...newHistory, newAiMessage],
@@ -130,9 +136,13 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
         setProgress(100);
         onClarificationComplete(aiResponseContent);
       }
+      // Estimate completion tokens
+      if (aiResponseContent) {
+        addUsage({ model: 'gemini-2.5-flash', kind: 'completion', tokens: estimateTokens(aiResponseContent), at: Date.now() } as any);
+      }
     } catch (error) {
       console.error("Chat error:", error);
-      const errorMessage: ChatMessage = { role: 'model', content: 'Sorry, I encountered an error. Please try again.' };
+      const errorMessage: ChatMessage = { id: nanoid(), role: 'model', content: 'Sorry, I encountered an error. Please try again.', createdAt: Date.now() };
       setPresentation(prev => ({...prev, chatHistory: [...newHistory, errorMessage]}));
     } finally {
       setIsLoading(false);
@@ -159,7 +169,7 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
                 </div>
             )}
             {isChatReady && chatHistory.map((message, index) => (
-              <div key={index} className={cn("flex items-start gap-3", message.role === 'user' ? 'justify-end' : 'justify-start')}>
+              <div key={message.id ?? String(index)} className={cn("flex items-start gap-3", message.role === 'user' ? 'justify-end' : 'justify-start')}>
                 {message.role === 'model' && <Bot className="h-6 w-6 text-primary flex-shrink-0 mt-1" />}
                 <div className={cn("p-4 rounded-xl max-w-[80%] whitespace-pre-wrap", message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted')}>
                   {message.content}

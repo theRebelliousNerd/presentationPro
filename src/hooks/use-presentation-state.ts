@@ -1,9 +1,9 @@
 'use client';
-import { useState, useEffect, useCallback, Dispatch, SetStateAction } from 'react';
+import { useState, useEffect, useCallback, Dispatch, SetStateAction, useRef } from 'react';
 import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
-import type { AppState, Presentation } from '@/lib/types';
+import type { AppState, Presentation, UploadedFileRef } from '@/lib/types';
 import { nanoid } from 'nanoid';
 
 const getInitialState = (id: string): {
@@ -31,9 +31,17 @@ const getInitialState = (id: string): {
   },
 });
 
+const DISABLE_FIRESTORE = process.env.NEXT_PUBLIC_DISABLE_FIRESTORE === 'true';
+
 async function savePresentation(presentation: Presentation) {
-  if (!db) {
-    console.warn('Firestore is not initialized yet. Skipping save.');
+  if (DISABLE_FIRESTORE || !db) {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('presentationDoc', JSON.stringify(presentation));
+      }
+    } catch (e) {
+      console.warn('Failed to persist presentation locally:', e);
+    }
     return;
   }
   try {
@@ -44,33 +52,42 @@ async function savePresentation(presentation: Presentation) {
   }
 }
 
-export function usePresentationState(): {
+const VALID_APP_STATES: AppState[] = ['initial','clarifying','approving','generating','editing','error'];
+
+export function usePresentationState(presentationIdOverride?: string): {
   isLoaded: boolean;
   appState: AppState;
   setAppState: Dispatch<SetStateAction<AppState>>;
   presentation: Presentation;
   setPresentation: Dispatch<SetStateAction<Presentation>>;
   resetState: () => void;
-  uploadFile: (file: File) => Promise<{ name: string; dataUrl: string; }>;
+  uploadFile: (file: File) => Promise<UploadedFileRef>;
+  duplicatePresentation: () => Promise<string>;
+  saveNow: () => Promise<void>;
 } {
   const [isLoaded, setIsLoaded] = useState(false);
   const [appState, setAppState] = useState<AppState>('initial');
   const [presentation, setPresentation] = useState<Presentation>(getInitialState('').presentation);
   const [presentationId, setPresentationId] = useState<string | null>(null);
+  const cancelAutosaveRef = useRef(false);
 
   // Load presentation ID from localStorage or create a new one
   useEffect(() => {
+    if (presentationIdOverride) {
+      setPresentationId(presentationIdOverride);
+      return;
+    }
     let currentId = localStorage.getItem('presentationId');
     if (!currentId) {
       currentId = nanoid();
       localStorage.setItem('presentationId', currentId);
     }
     setPresentationId(currentId);
-  }, []);
+  }, [presentationIdOverride]);
 
   // Subscribe to Firestore for presentation updates
   useEffect(() => {
-    if (presentationId && db) {
+    if (presentationId && db && !DISABLE_FIRESTORE) {
       setIsLoaded(true); // Allow UI to render immediately
       const presRef = doc(db, 'presentations', presentationId);
       const unsubscribe = onSnapshot(presRef, (docSnap) => {
@@ -79,11 +96,19 @@ export function usePresentationState(): {
           const fullPresentation = { ...getInitialState(presentationId).presentation, ...data };
           setPresentation(fullPresentation);
           const savedAppState = localStorage.getItem('appState') as AppState | null;
-          // Only set app state from localStorage if it's valid and we are in a consistent state
-          if (savedAppState && Object.keys(getInitialState('').presentation).includes(savedAppState)) {
-             setAppState(savedAppState);
+          if (savedAppState && VALID_APP_STATES.includes(savedAppState)) {
+            setAppState(savedAppState);
           } else {
-             setAppState(fullPresentation.slides.length > 0 ? 'editing' : (fullPresentation.clarifiedGoals ? 'approving' : (fullPresentation.chatHistory.length > 0 ? 'clarifying' : 'initial')));
+            const derived: AppState = fullPresentation.slides.length > 0
+              ? 'editing'
+              : fullPresentation.outline.length > 0
+              ? 'generating'
+              : fullPresentation.clarifiedGoals
+              ? 'approving'
+              : fullPresentation.chatHistory.length > 0
+              ? 'clarifying'
+              : 'initial';
+            setAppState(derived);
           }
 
         } else {
@@ -96,10 +121,22 @@ export function usePresentationState(): {
       });
       return () => unsubscribe();
     } else if (presentationId) {
-      // Handle case where db is not yet initialized (e.g. server-side)
+      // Local-only mode (no Firestore) for development
       const initialState = getInitialState(presentationId);
-      setPresentation(initialState.presentation);
-      const savedAppState = typeof window !== 'undefined' ? localStorage.getItem('appState') as AppState : 'initial';
+      let restored = initialState.presentation;
+      try {
+        if (typeof window !== 'undefined') {
+          const raw = localStorage.getItem('presentationDoc');
+          if (raw) {
+            const parsed = JSON.parse(raw) as Presentation;
+            if (parsed && parsed.id === presentationId) {
+              restored = { ...restored, ...parsed };
+            }
+          }
+        }
+      } catch {}
+      setPresentation(restored);
+      const savedAppState = typeof window !== 'undefined' ? (localStorage.getItem('appState') as AppState) : 'initial';
       setAppState(savedAppState || 'initial');
       setIsLoaded(true);
     }
@@ -108,7 +145,7 @@ export function usePresentationState(): {
 
   // Save presentation state to Firestore whenever it changes
   useEffect(() => {
-    if (isLoaded && presentation.id) {
+    if (isLoaded && presentation.id && !cancelAutosaveRef.current) {
       savePresentation(presentation);
     }
   }, [presentation, isLoaded]);
@@ -134,24 +171,58 @@ export function usePresentationState(): {
     setIsLoaded(true);
   }, [presentation]);
   
-  const uploadFile = async (file: File) => {
-    if (!storage || !presentation.id) {
-      throw new Error('Firebase Storage or presentation ID is not available.');
+  const uploadFile = async (file: File): Promise<UploadedFileRef> => {
+    // Ensure we have a presentation ID for namespacing uploads
+    let idToUse = presentation.id;
+    if (!idToUse) {
+      idToUse = presentationId || nanoid();
+      try {
+        localStorage.setItem('presentationId', idToUse);
+      } catch {}
+      setPresentation(prev => ({ ...prev, id: idToUse! }));
+      setPresentationId(idToUse);
     }
-    const storageRef = ref(storage, `presentations/${presentation.id}/${file.name}`);
-    await uploadBytes(storageRef, file);
-    const downloadURL = await getDownloadURL(storageRef);
-    
-    // Convert to dataUrl for consistency for now
-    const response = await fetch(downloadURL);
-    const blob = await response.blob();
-    const dataUrl = await new Promise<string>((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.readAsDataURL(blob);
-    });
 
-    return { name: file.name, dataUrl };
+    const useLocal = process.env.NEXT_PUBLIC_LOCAL_UPLOADS === 'true' || !storage;
+    if (useLocal) {
+      // Upload via local API to write files under public/uploads
+      const form = new FormData();
+      form.append('file', file);
+      form.append('presentationId', idToUse!);
+      form.append('filename', file.name);
+      const res = await fetch('/api/upload', { method: 'POST', body: form });
+      if (!res.ok) throw new Error('Local upload failed');
+      const data = await res.json();
+      return { name: data.name, url: data.url, path: data.path };
+    }
+
+    // Default: Firebase Storage
+    const safeName = file.name.replace(/[^\w\-.]+/g, '_');
+    const path = `presentations/${idToUse}/${safeName}`;
+    const storageRef = ref(storage, path);
+    await uploadBytes(storageRef, file);
+    const url = await getDownloadURL(storageRef);
+    return { name: file.name, url, path };
+  };
+
+  const duplicatePresentation = async (): Promise<string> => {
+    if (!db || !presentation.id) throw new Error('Cannot duplicate without a presentation loaded');
+    const newId = nanoid();
+    const copy: Presentation = {
+      ...presentation,
+      id: newId,
+    };
+    cancelAutosaveRef.current = true;
+    try {
+      await setDoc(doc(db, 'presentations', newId), copy, { merge: true });
+    } finally {
+      cancelAutosaveRef.current = false;
+    }
+    return newId;
+  };
+
+  const saveNow = async () => {
+    await savePresentation(presentation);
   };
 
   return {
@@ -162,5 +233,7 @@ export function usePresentationState(): {
     setPresentation,
     resetState,
     uploadFile,
+    duplicatePresentation,
+    saveNow,
   };
 }

@@ -1,0 +1,45 @@
+services:
+  web:
+    build:
+      context: .
+      target: dev
+      args:
+        - NODE_VERSION=20
+    ports:
+      - "${HOST_PORT:-3000}:3000"
+    env_file:
+      - .env
+    environment:
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=1
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - npm-cache:/root/.npm
+    command: sh -c "npm ci && npm run dev"
+    # Uncomment if you also want the Genkit dev server
+    # depends_on:
+    #   - genkit
+
+  # Optional: Genkit development server (Explorer/DevTools)
+  genkit:
+    build:
+      context: .
+      target: dev
+      args:
+        - NODE_VERSION=20
+    env_file:
+      - .env
+    environment:
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=1
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - npm-cache:/root/.npm
+    command: sh -c "npm ci && npm run genkit:watch"
+
+volumes:
+  npm-cache:

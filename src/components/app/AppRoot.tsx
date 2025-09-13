@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef, useState } from 'react';
 import { usePresentationState } from '@/hooks/use-presentation-state';
 import { Slide } from '@/lib/types';
 import Header from '@/components/app/Header';
@@ -11,10 +12,8 @@ import Editor from '@/components/app/editor/Editor';
 import ErrorState from '@/components/app/ErrorState';
 import { generateSlideContent } from '@/lib/actions';
 import { nanoid } from 'nanoid';
-import { useRef, useState } from 'react';
-import { addUsage, estimateTokens } from '@/lib/token-meter';
 
-export default function Home() {
+export default function AppRoot({ presentationIdOverride }: { presentationIdOverride?: string }) {
   const {
     isLoaded,
     appState,
@@ -24,7 +23,7 @@ export default function Home() {
     resetState,
     uploadFile,
     duplicatePresentation,
-  } = usePresentationState();
+  } = usePresentationState(presentationIdOverride);
 
   const [genProgress, setGenProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
   const cancelGenerationRef = useRef(false);
@@ -57,23 +56,9 @@ export default function Home() {
       for (let i = 0; i < outline.length; i++) {
         if (cancelGenerationRef.current) break;
         const title = outline[i];
-        // Generate one slide at a time for better progress control
-        addUsage({ model: 'gemini-2.5-flash', kind: 'prompt', tokens: estimateTokens(title) + 1500, at: Date.now() } as any);
-        const assets = [
-          ...(presentation.initialInput.files || []).map(f => ({ name: f.name, url: f.url, kind: f.kind || (isImageUrl(f.url) ? 'image' : 'document') })),
-          ...(presentation.initialInput.styleFiles || []).map(f => ({ name: f.name, url: f.url, kind: f.kind || (isImageUrl(f.url) ? 'image' : 'document') })),
-        ];
-        const [slide] = await generateSlideContent({ outline: [title], assets });
-        const withId: Slide = { ...slide, id: nanoid(), imageState: 'loading', useGeneratedImage: true };
-        if ((slide as any).useAssetImageUrl) {
-          withId.imageUrl = (slide as any).useAssetImageUrl;
-          withId.assetImageUrl = (slide as any).useAssetImageUrl;
-          withId.useGeneratedImage = false;
-          withId.imageState = 'done';
-        }
+        const [slide] = await generateSlideContent({ outline: [title] });
+        const withId: Slide = { ...slide, id: nanoid(), imageState: 'loading' };
         generated.push(withId);
-        const completionText = [slide.title, ...(slide.content||[]), slide.speakerNotes].join('\n');
-        addUsage({ model: 'gemini-2.5-flash', kind: 'completion', tokens: estimateTokens(completionText), at: Date.now() } as any);
         setPresentation(prev => ({ ...prev, slides: [...generated] }));
         setGenProgress({ current: i + 1, total: outline.length });
       }
@@ -114,9 +99,6 @@ export default function Home() {
         return <Editor
           slides={presentation.slides}
           setSlides={(slides: Slide[]) => setPresentation(prev => ({...prev, slides}))}
-          presentation={presentation}
-          setPresentation={setPresentation}
-          uploadFile={uploadFile}
           />;
       case 'error':
         return <ErrorState onReset={resetState} />
@@ -133,9 +115,4 @@ export default function Home() {
       </main>
     </div>
   );
-}
-
-function isImageUrl(u: string) {
-  const base = u.split('?')[0].toLowerCase();
-  return base.endsWith('.png') || base.endsWith('.jpg') || base.endsWith('.jpeg') || base.endsWith('.webp') || base.endsWith('.gif') || base.endsWith('.svg');
 }

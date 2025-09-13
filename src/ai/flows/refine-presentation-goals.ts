@@ -12,11 +12,13 @@ import {z} from 'genkit';
 
 const RefinePresentationGoalsInputSchema = z.object({
   inputText: z.string().describe('Unstructured text, notes, or a full script.'),
-  uploadedFiles: z.array(
-    z.string().describe(
-      "Uploaded files as data URIs that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
+  uploadedFiles: z
+    .array(
+      z.string().describe(
+        "Uploaded file references as public URLs (https://...) pointing to content in storage."
+      )
     )
-  ).optional(),
+    .optional(),
 });
 export type RefinePresentationGoalsInput = z.infer<typeof RefinePresentationGoalsInputSchema>;
 
@@ -38,7 +40,7 @@ const refinePresentationGoalsPrompt = ai.definePrompt({
 
 You will ask targeted, sequential clarifying questions about the user's content, audience, and goals to build a comprehensive understanding of the presentation's requirements.
 
-Once you have a comprehensive understanding of the presentation's requirements, summarize the final plan and output a ---FINISHED--- token.
+Once you have a comprehensive understanding of the presentation's requirements, summarize the final plan and set finished=true in your structured response.
 
 Here is some context on what makes a great presentation, use it to inform your questions and strategy:
 START OF CONTEXT
@@ -406,7 +408,7 @@ Uploaded Files:
 - {{this}}
 {{/each}}
 {{/if}}
-`,
+  `,
 });
 
 const refinePresentationGoalsFlow = ai.defineFlow(
@@ -417,12 +419,9 @@ const refinePresentationGoalsFlow = ai.defineFlow(
   },
   async input => {
     const {output} = await refinePresentationGoalsPrompt(input);
-    // Detect the FINISHED token in the output
-    const finished = output?.refinedGoals?.includes('---FINISHED---') || false;
-
     return {
       refinedGoals: output!.refinedGoals,
-      finished,
+      finished: output!.finished ?? false,
     };
   }
 );

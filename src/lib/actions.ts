@@ -6,8 +6,9 @@ import { generateSlideContent as generateSlideContentFlow } from '@/ai/flows/gen
 import { generateAndEditImage as generateAndEditImageFlow } from '@/ai/flows/generate-and-edit-images';
 import { rephraseSpeakerNotes as rephraseSpeakerNotesFlow } from '@/ai/flows/rephrase-speaker-notes';
 
-import type { ChatMessage, Presentation } from './types';
+import type { ChatMessage, Presentation, UploadedFileRef } from './types';
 import type { GenerateSlideContentInput } from '@/ai/flows/generate-slide-content';
+import type { UploadedFileRef } from './types';
 
 const TONE_LABELS = ['Very Casual', 'Casual', 'Neutral', 'Formal', 'Very Formal'];
 const ENERGY_LABELS = ['Very Low', 'Low', 'Neutral', 'High', 'Very High'];
@@ -15,7 +16,7 @@ const ENERGY_LABELS = ['Very Low', 'Low', 'Neutral', 'High', 'Very High'];
 export async function getClarification(
   history: ChatMessage[],
   initialInput: Presentation['initialInput'],
-  newFiles: { name: string; dataUrl: string }[] = []
+  newFiles: UploadedFileRef[] = []
 ) {
   const formality = TONE_LABELS[initialInput.tone.formality];
   const energy = ENERGY_LABELS[initialInput.tone.energy];
@@ -38,7 +39,7 @@ Style Guide Files: ${initialInput.styleFiles.map(f => f.name).join(', ')}`;
   ].join('\n\n');
   
   const allFiles = [...initialInput.files, ...initialInput.styleFiles, ...newFiles];
-  const uploadedFiles = allFiles.map(f => f.dataUrl);
+  const uploadedFiles = allFiles.map(f => f.url);
 
   return await refinePresentationGoals({ inputText, uploadedFiles });
 }

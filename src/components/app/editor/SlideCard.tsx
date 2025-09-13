@@ -12,6 +12,17 @@ type SlideCardProps = {
 };
 
 export default function SlideCard({ slide, isActive, onClick }: SlideCardProps) {
+  const canUseNextImage = (() => {
+    const url = slide.imageUrl || '';
+    if (!url) return false;
+    if (url.startsWith('data:') || url.startsWith('blob:')) return false;
+    try {
+      const h = new URL(url).hostname;
+      return ['placehold.co','images.unsplash.com','picsum.photos'].includes(h);
+    } catch {
+      return false;
+    }
+  })();
   return (
     <Card
       className={cn(
@@ -33,12 +44,16 @@ export default function SlideCard({ slide, isActive, onClick }: SlideCardProps) 
             </div>
           )}
           {slide.imageUrl && slide.imageState === 'done' && (
-            <Image
-              src={slide.imageUrl}
-              alt={slide.title}
-              fill
-              className="object-cover"
-            />
+            canUseNextImage ? (
+              <Image
+                src={slide.imageUrl}
+                alt={slide.title}
+                fill
+                className="object-cover"
+              />
+            ) : (
+              <img src={slide.imageUrl} alt={slide.title} className="w-full h-full object-cover" />
+            )
           )}
         </div>
         <div className="flex-grow overflow-hidden">

@@ -2,12 +2,36 @@
 
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
+import TokenMeter from '@/components/app/TokenMeter';
+import { toast } from '@/hooks/use-toast';
+import { Settings } from 'lucide-react';
+import SettingsDialog from '@/components/app/SettingsDialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 type HeaderProps = {
   onReset: () => void;
+  onSaveCopy?: () => Promise<void>;
+  onSaveNow?: () => Promise<void>;
 };
 
-export default function Header({ onReset }: HeaderProps) {
+export default function Header({ onReset, onSaveCopy, onSaveNow }: HeaderProps) {
+  const handleSaveCopyAndReset = async () => {
+    if (onSaveCopy) {
+      await onSaveCopy();
+    }
+    onReset();
+  };
+
   return (
     <header className="w-full bg-card shadow-lg p-4 md:p-6 border-b border-border/50">
       <div className="container mx-auto flex justify-between items-center">
@@ -26,13 +50,40 @@ export default function Header({ onReset }: HeaderProps) {
             </h1>
           </div>
         </div>
-        <Button
-          variant="outline"
-          onClick={onReset}
-          className="font-medium hover:bg-primary/10 hover:text-primary hover:border-primary transition-colors"
-        >
-          Start Over
-        </Button>
+        <div className="flex items-center gap-3">
+          <TokenMeter />
+          <SettingsDialog>
+            <Button size="sm" variant="outline"><Settings className="mr-2 h-4 w-4"/>Settings</Button>
+          </SettingsDialog>
+          {onSaveNow && (
+            <Button size="sm" variant="outline" onClick={async () => { await onSaveNow(); toast({ title: 'Saved', description: 'Progress saved.' }); }}>Save</Button>
+          )}
+          <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              variant="outline"
+              className="font-medium hover:bg-primary/10 hover:text-primary hover:border-primary transition-colors"
+            >
+              Start Over
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Start over?</AlertDialogTitle>
+              <AlertDialogDescription>
+                You can save a copy of the current presentation first, or start fresh.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              {onSaveCopy && (
+                <AlertDialogAction onClick={handleSaveCopyAndReset}>Save as Copy & Start Over</AlertDialogAction>
+              )}
+              <AlertDialogAction onClick={onReset}>Start Fresh</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+        </div>
       </div>
     </header>
   );

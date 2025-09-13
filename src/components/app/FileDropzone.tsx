@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, ChangeEvent, DragEvent } from 'react';
+import { useState, useCallback, ChangeEvent, DragEvent, useRef } from 'react';
 import { UploadCloud, File as FileIcon, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -13,6 +13,7 @@ type FileDropzoneProps = {
 export default function FileDropzone({ onFilesChange, acceptedFormats }: FileDropzoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   const handleFileChange = useCallback(
     (newFiles: FileList) => {
@@ -66,13 +67,13 @@ export default function FileDropzone({ onFilesChange, acceptedFormats }: FileDro
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
-        onClick={() => document.getElementById('fileInput')?.click()}
+        onClick={() => inputRef.current?.click()}
       >
         <input
-          id="fileInput"
           type="file"
           multiple
           className="hidden"
+          ref={inputRef}
           onChange={(e: ChangeEvent<HTMLInputElement>) => e.target.files && handleFileChange(e.target.files)}
           accept={acceptedFormats}
         />
