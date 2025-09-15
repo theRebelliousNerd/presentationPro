@@ -1,45 +1,340 @@
+version: '3.8'
+
 services:
+  # Frontend Service
   web:
     build:
       context: .
-      target: dev
-      args:
-        - NODE_VERSION=20
+      dockerfile: Dockerfile
+    container_name: presentationpro-web
     ports:
-      - "${HOST_PORT:-3000}:3000"
-    env_file:
-      - .env
+      - "3000:3000"
     environment:
+      - NEXT_PUBLIC_ORCH_MODE=adk
+      - ADK_BASE_URL=http://api-gateway:8088
       - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
-      - NODE_ENV=development
-      - CHOKIDAR_USEPOLLING=1
-    volumes:
-      - .:/app
-      - /app/node_modules
-      - npm-cache:/root/.npm
-    command: sh -c "npm ci && npm run dev"
-    # Uncomment if you also want the Genkit dev server
-    # depends_on:
-    #   - genkit
+    depends_on:
+      - api-gateway
+    networks:
+      - frontend-network
+      - backend-network
 
-  # Optional: Genkit development server (Explorer/DevTools)
-  genkit:
+  # API Gateway Service (formerly orchestrator)
+  api-gateway:
     build:
-      context: .
-      target: dev
-      args:
-        - NODE_VERSION=20
-    env_file:
-      - .env
+      context: ./adkpy
+      dockerfile: Dockerfile
+    container_name: presentationpro-api-gateway
+    ports:
+      - "8080:8080"
+      - "8089:8089"
+      - "18088:8088"
     environment:
       - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
-      - NODE_ENV=development
-      - CHOKIDAR_USEPOLLING=1
+      - CLARIFIER_URL=http://clarifier:10001
+      - OUTLINE_URL=http://outline:10002
+      - SLIDE_WRITER_URL=http://slide-writer:10003
+      - CRITIC_URL=http://critic:10004
+      - NOTES_POLISHER_URL=http://notes-polisher:10005
+      - DESIGN_URL=http://design:10006
+      - SCRIPT_WRITER_URL=http://script-writer:10007
+      - RESEARCH_URL=http://research:10008
+      - ARANGO_URL=http://arangodb:8529
+    depends_on:
+      - clarifier
+      - outline
+      - slide-writer
+      - critic
+      - notes-polisher
+      - design
+      - script-writer
+      - research
+      - arangodb
+    networks:
+      - backend-network
+      - database-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Agent Services
+  clarifier:
+    build:
+      context: ./adkpy/agents/clarifier
+      dockerfile: Dockerfile
+    container_name: presentationpro-clarifier
+    ports:
+      - "10001:10001"
+    environment:
+      - A2A_PORT=10001
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - PUBLIC_URL=http://clarifier:10001
+      - ARANGODB_URL=http://arangodb:8529
+      - ARANGODB_USER=root
+      - ARANGODB_PASSWORD=${ARANGO_ROOT_PASSWORD:-root}
+      - ARANGODB_DB=presentpro
+    networks:
+      - backend-network
+      - database-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  outline:
+    build:
+      context: ./adkpy/agents/outline
+      dockerfile: Dockerfile
+    container_name: presentationpro-outline
+    ports:
+      - "10002:10002"
+    environment:
+      - A2A_PORT=10002
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - PUBLIC_URL=http://outline:10002
+      - ARANGODB_URL=http://arangodb:8529
+      - ARANGODB_USER=root
+      - ARANGODB_PASSWORD=${ARANGO_ROOT_PASSWORD:-root}
+      - ARANGODB_DB=presentpro
+    networks:
+      - backend-network
+      - database-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10002/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  slide-writer:
+    build:
+      context: ./adkpy/agents/slide_writer
+      dockerfile: Dockerfile
+    container_name: presentationpro-slide-writer
+    ports:
+      - "10003:10003"
+    environment:
+      - A2A_PORT=10003
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - PUBLIC_URL=http://slide-writer:10003
+      - ARANGODB_URL=http://arangodb:8529
+      - ARANGODB_USER=root
+      - ARANGODB_PASSWORD=${ARANGO_ROOT_PASSWORD:-root}
+      - ARANGODB_DB=presentpro
+    networks:
+      - backend-network
+      - database-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10003/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  critic:
+    build:
+      context: ./adkpy/agents/critic
+      dockerfile: Dockerfile
+    container_name: presentationpro-critic
+    ports:
+      - "10004:10004"
+    environment:
+      - A2A_PORT=10004
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - PUBLIC_URL=http://critic:10004
+      - ARANGODB_URL=http://arangodb:8529
+      - ARANGODB_USER=root
+      - ARANGODB_PASSWORD=${ARANGO_ROOT_PASSWORD:-root}
+      - ARANGODB_DB=presentpro
+    networks:
+      - backend-network
+      - database-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10004/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  notes-polisher:
+    build:
+      context: ./adkpy/agents/notes_polisher
+      dockerfile: Dockerfile
+    container_name: presentationpro-notes-polisher
+    ports:
+      - "10005:10005"
+    environment:
+      - A2A_PORT=10005
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - PUBLIC_URL=http://notes-polisher:10005
+      - ARANGODB_URL=http://arangodb:8529
+      - ARANGODB_USER=root
+      - ARANGODB_PASSWORD=${ARANGO_ROOT_PASSWORD:-root}
+      - ARANGODB_DB=presentpro
+    networks:
+      - backend-network
+      - database-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10005/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  design:
+    build:
+      context: ./adkpy/agents/design
+      dockerfile: Dockerfile
+    container_name: presentationpro-design
+    ports:
+      - "10006:10006"
+    environment:
+      - A2A_PORT=10006
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - PUBLIC_URL=http://design:10006
+      - ARANGODB_URL=http://arangodb:8529
+      - ARANGODB_USER=root
+      - ARANGODB_PASSWORD=${ARANGO_ROOT_PASSWORD:-root}
+      - ARANGODB_DB=presentpro
+    networks:
+      - backend-network
+      - database-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10006/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  script-writer:
+    build:
+      context: ./adkpy/agents/script_writer
+      dockerfile: Dockerfile
+    container_name: presentationpro-script-writer
+    ports:
+      - "10007:10007"
+    environment:
+      - A2A_PORT=10007
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - PUBLIC_URL=http://script-writer:10007
+      - ARANGODB_URL=http://arangodb:8529
+      - ARANGODB_USER=root
+      - ARANGODB_PASSWORD=${ARANGO_ROOT_PASSWORD:-root}
+      - ARANGODB_DB=presentpro
+    networks:
+      - backend-network
+      - database-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10007/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  research:
+    build:
+      context: ./adkpy/agents/research
+      dockerfile: Dockerfile
+    container_name: presentationpro-research
+    ports:
+      - "10008:10008"
+    environment:
+      - A2A_PORT=10008
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - PUBLIC_URL=http://research:10008
+      - ARANGODB_URL=http://arangodb:8529
+      - ARANGODB_USER=root
+      - ARANGODB_PASSWORD=${ARANGO_ROOT_PASSWORD:-root}
+      - ARANGODB_DB=presentpro
+    networks:
+      - backend-network
+      - database-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10008/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Orchestrate Agent (A2A coordinator)
+  orchestrate:
+    build:
+      context: ./adkpy/agents/orchestrate
+      dockerfile: Dockerfile
+    container_name: presentationpro-orchestrate
+    ports:
+      - "10000:10000"
+    environment:
+      - PORT=10000
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - REMOTE_AGENT_ADDRESSES=http://clarifier:10001,http://outline:10002,http://slide-writer:10003,http://critic:10004,http://notes-polisher:10005,http://design:10006,http://script-writer:10007,http://research:10008
+    depends_on:
+      - clarifier
+      - outline
+      - slide-writer
+      - critic
+      - notes-polisher
+      - design
+      - script-writer
+      - research
+    networks:
+      - backend-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ADK Dev UI Service
+  dev-ui:
+    build:
+      context: ./adkpy
+      dockerfile: Dockerfile.devui
+    container_name: presentationpro-dev-ui
+    ports:
+      - "8100:8100"
+    environment:
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+    depends_on:
+      - clarifier
+      - outline
+      - slide-writer
+      - critic
+      - notes-polisher
+      - design
+      - script-writer
+      - research
+    networks:
+      - backend-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8100/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Database Service
+  arangodb:
+    image: arangodb:latest
+    container_name: presentationpro-arangodb
+    ports:
+      - "8530:8529"
+    environment:
+      - ARANGO_ROOT_PASSWORD=${ARANGO_ROOT_PASSWORD:-root}
     volumes:
-      - .:/app
-      - /app/node_modules
-      - npm-cache:/root/.npm
-    command: sh -c "npm ci && npm run genkit:watch"
+      - arangodb-data:/var/lib/arangodb3
+      - arangodb-apps:/var/lib/arangodb3-apps
+    networks:
+      - database-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8529/_api/version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  frontend-network:
+    driver: bridge
+  backend-network:
+    driver: bridge
+  database-network:
+    driver: bridge
 
 volumes:
-  npm-cache:
+  arangodb-data:
+  arangodb-apps:

@@ -1,0 +1,32 @@
+{
+  "eval_set_id": "script_writer_eval",
+  "name": "Script Writer Agent Evaluation",
+  "description": "Tests the script writer's ability to synthesize a cohesive script from slide content.",
+  "eval_cases": [
+    {
+      "eval_id": "generate_full_script",
+      "conversation": [
+        {
+          "invocation_id": "eval-script-1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "{\"slides\": [{\"title\": \"Introduction\", \"content\": [\"Welcome to our topic.\"], \"speakerNotes\": \"Greet the audience.\"}, {\"title\": \"Conclusion\", \"content\": [\"Thank you for your time.\"], \"speakerNotes\": \"Wrap up and take questions.\"}], \"assets\": [{\"name\": \"main_source.pdf\", \"url\": \"http://example.com\"}]}"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"script\": \"Good morning, everyone. To begin, our first slide, titled 'Introduction,' sets the stage for our discussion today. [ref: main_source.pdf] As we move to our conclusion, the key takeaway is to remember the main points we've covered. Thank you for your attention. \\n\\nBibliography\\n- main_source.pdf — http://example.com\"}"
+              }
+            ],
+            "role": null
+          }
+        }
+      ],
+      "session_input": { "app_name": "script_writer", "user_id": "user" }
+    }
+  ]
+}

@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import TokenMeter from '@/components/app/TokenMeter';
+import TelemetryDetails from '@/components/app/TelemetryDetails';
 import { toast } from '@/hooks/use-toast';
 import { Settings } from 'lucide-react';
 import SettingsDialog from '@/components/app/SettingsDialog';
@@ -52,6 +53,7 @@ export default function Header({ onReset, onSaveCopy, onSaveNow }: HeaderProps) 
         </div>
         <div className="flex items-center gap-3">
           <TokenMeter />
+          <TelemetryDetails />
           <SettingsDialog>
             <Button size="sm" variant="outline"><Settings className="mr-2 h-4 w-4"/>Settings</Button>
           </SettingsDialog>

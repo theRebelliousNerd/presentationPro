@@ -1,0 +1,32 @@
+{
+  "eval_set_id": "critic_eval",
+  "name": "Critic Agent Evaluation",
+  "description": "Tests the critic agent's ability to enforce quality gates and correct slide drafts.",
+  "eval_cases": [
+    {
+      "eval_id": "correct_long_slide",
+      "conversation": [
+        {
+          "invocation_id": "eval-critic-1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "{\"slideDraft\": {\"title\": \"A Very Long and Detailed Title About AI Applications\", \"content\": [\"This bullet point is far too long and continues on and on, violating the word count rule severely.\"], \"speakerNotes\": \"talk about AI\"}, \"assets\": [{\"name\": \"study.pdf\", \"text\": \"Accuracy is 95%\"}]}"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"title\": \"AI Diagnostic Applications\", \"content\": [\"Achieves 95% accuracy in diagnostics [ref: study.pdf]\", \"Significantly reduces analysis time\"], \"speakerNotes\": \"Highlight the 95% accuracy rate from the provided study and its impact on clinical workflows.\", \"imagePrompt\": \"Professional medical AI diagnostic workstation displaying imaging analysis.\"}"
+              }
+            ],
+            "role": null
+          }
+        }
+      ],
+      "session_input": { "app_name": "critic", "user_id": "user" }
+    }
+  ]
+}

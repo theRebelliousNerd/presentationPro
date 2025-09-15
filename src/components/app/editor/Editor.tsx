@@ -9,7 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Download } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ClarificationChat from '@/components/app/ClarificationChat';
-import { downloadPresentationHtml, downloadImages, downloadEverything } from '@/lib/download';
+import { downloadPresentationHtml, downloadImages, downloadEverything, downloadPptx } from '@/lib/download';
+import { Textarea } from '@/components/ui/textarea';
+import { generateFullScript } from '@/lib/actions';
 
 type EditorProps = {
   slides: Slide[];
@@ -72,6 +74,7 @@ export default function Editor({ slides, setSlides, presentation, setPresentatio
           <TabsList className="w-fit">
             <TabsTrigger value="editor">Editor</TabsTrigger>
             <TabsTrigger value="chat">Chat</TabsTrigger>
+            <TabsTrigger value="script">Script</TabsTrigger>
           </TabsList>
           <TabsContent value="editor" className="flex-grow flex flex-col">
             {activeSlide ? (
@@ -79,6 +82,21 @@ export default function Editor({ slides, setSlides, presentation, setPresentatio
                 key={activeSlide.id}
                 slide={activeSlide}
                 updateSlide={updateSlide}
+                assets={(presentation?.initialInput?.files || []).map(f => ({
+                  name: f.name,
+                  url: f.url,
+                  kind: f.kind || (/(png|jpg|jpeg|gif|webp|svg)$/i.test(f.name) ? 'image' : /(pdf|docx|md|txt|csv|xls|xlsx)$/i.test(f.name) ? 'document' : 'other'),
+                }))}
+                constraints={presentation ? (
+                  (activeSlide.useConstraints === false && activeSlide.constraintsOverride)
+                  ? activeSlide.constraintsOverride
+                  : {
+                      citationsRequired: presentation.initialInput?.citationsRequired,
+                      slideDensity: presentation.initialInput?.slideDensity,
+                      mustInclude: presentation.initialInput?.mustInclude,
+                      mustAvoid: presentation.initialInput?.mustAvoid,
+                    }
+                ) : undefined}
               />
             ) : (
               <div className="flex-grow flex items-center justify-center bg-card rounded-lg shadow-inner">
@@ -98,11 +116,32 @@ export default function Editor({ slides, setSlides, presentation, setPresentatio
               <div className="flex items-center justify-center h-full text-muted-foreground">Chat unavailable</div>
             )}
           </TabsContent>
+          <TabsContent value="script" className="flex-grow flex flex-col gap-3">
+            <div className="flex gap-2">
+              <Button
+                onClick={async () => {
+                  if (!setPresentation || !presentation) return;
+                  const assets = (presentation.initialInput?.files || []);
+                  const script = await generateFullScript(slides.map(s => ({ title: s.title, content: s.content, speakerNotes: s.speakerNotes })), assets as any);
+                  setPresentation(prev => ({ ...(prev as any), fullScript: script }));
+                }}
+              >Generate Script</Button>
+              <Button variant="outline" onClick={() => downloadScript(slides)}>
+                <Download className="mr-2 h-4 w-4" />
+                Download as .txt
+              </Button>
+            </div>
+            <Textarea className="flex-grow" value={presentation?.fullScript || ''} onChange={(e) => setPresentation && setPresentation(prev => ({ ...(prev as any), fullScript: e.target.value }))} placeholder="Generate to view a full script with references..." />
+          </TabsContent>
         </Tabs>
         <div className="flex-shrink-0 pt-4 flex gap-2 flex-wrap">
           <Button onClick={() => downloadScript(slides)}>
             <Download className="mr-2 h-4 w-4" />
             Download Script
+          </Button>
+          <Button variant="outline" onClick={() => downloadPptx(slides)}>
+            <Download className="mr-2 h-4 w-4" />
+            Export PowerPoint (.pptx)
           </Button>
           <Button variant="outline" onClick={() => downloadPresentationHtml(slides)}>
             <Download className="mr-2 h-4 w-4" />

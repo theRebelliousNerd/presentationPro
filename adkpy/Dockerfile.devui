@@ -1,0 +1,30 @@
+# Dockerfile for ADK Dev UI
+FROM python:3.12-slim
+
+# Set the working directory
+WORKDIR /app
+
+# Install uv for faster package installation
+RUN pip install uv
+
+# Install google-adk and base dependencies
+RUN uv pip install --system google-adk aiohttp pydantic python-dotenv
+
+# Copy requirements first for better caching (if exists)
+COPY requirements.txt* /app/
+RUN if [ -f requirements.txt ]; then uv pip install --system --no-cache-dir -r requirements.txt; fi
+
+# Copy all application code
+COPY . /app/
+
+# Set Python path to include agents
+ENV PYTHONPATH=/app
+
+# Environment variables (will be overridden by docker-compose)
+ENV GOOGLE_GENAI_API_KEY=""
+
+# Expose the Dev UI port
+EXPOSE 8100
+
+# Run the Dev UI launch script
+CMD ["python", "launch_dev_ui.py"]

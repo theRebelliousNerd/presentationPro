@@ -1,0 +1,91 @@
+{
+  "eval_set_id": "clarifier_eval",
+  "name": "Clarifier Agent Evaluation",
+  "description": "Tests the clarifier agent's ability to ask targeted questions and summarize presentation goals.",
+  "eval_cases": [
+    {
+      "eval_id": "vague_request",
+      "conversation": [
+        {
+          "invocation_id": "eval-clarifier-1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "{\"initialInput\": {\"text\": \"Make a presentation about AI\"}, \"history\": []}"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"response\": \"Of course! To get started, who is the target audience for this presentation?\", \"finished\": false}"
+              }
+            ],
+            "role": null
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "clarifier",
+        "user_id": "user"
+      }
+    },
+    {
+      "eval_id": "partially_specified_request",
+      "conversation": [
+        {
+          "invocation_id": "eval-clarifier-2",
+          "user_content": {
+            "parts": [
+              {
+                "text": "{\"initialInput\": {\"text\": \"Make a presentation about AI\"}, \"history\": [{\"role\": \"user\", \"content\": \"Make a presentation about AI\"}, {\"role\": \"assistant\", \"content\": \"Who is the target audience?\"}, {\"role\": \"user\", \"content\": \"It's for our internal engineering team.\"}]}"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"response\": \"Great, that's helpful. How long should the presentation be?\", \"finished\": false}"
+              }
+            ],
+            "role": null
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "clarifier",
+        "user_id": "user"
+      }
+    },
+    {
+      "eval_id": "fully_specified_request",
+      "conversation": [
+        {
+          "invocation_id": "eval-clarifier-3",
+          "user_content": {
+            "parts": [
+              {
+                "text": "{\"initialInput\": {\"text\": \"Make a presentation about AI\"}, \"history\": [{\"role\": \"user\", \"content\": \"Make a presentation about AI\"}, {\"role\": \"assistant\", \"content\": \"Who is the target audience?\"}, {\"role\": \"user\", \"content\": \"It's for our internal engineering team.\"}, {\"role\": \"assistant\", \"content\": \"How long should the presentation be?\"}, {\"role\": \"user\", \"content\": \"About 30 minutes, with some time for Q&A.\"}]}"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"response\": \"I understand you need a 30-minute technical presentation about AI for an internal engineering team. The goal is to provide an overview and facilitate a Q&A session.\", \"finished\": true}"
+              }
+            ],
+            "role": null
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "clarifier",
+        "user_id": "user"
+      }
+    }
+  ]
+}

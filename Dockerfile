@@ -21,7 +21,7 @@ RUN npm run build
 FROM base AS dev
 ENV NODE_ENV=development
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 COPY . .
 EXPOSE 3000
 CMD ["npm", "run", "dev"]
@@ -36,4 +36,3 @@ COPY --from=build /app/public ./public
 COPY --from=build /app/next.config.ts ./next.config.ts
 EXPOSE 3000
 CMD ["npm", "run", "start"]
-

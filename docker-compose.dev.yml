@@ -1,0 +1,163 @@
+version: '3.9'
+
+services:
+  # Development overrides for Next.js frontend
+  web:
+    build:
+      target: dev
+    environment:
+      - NODE_ENV=development
+      - DEBUG=presentationpro:*
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    volumes:
+      - .:/app:cached
+      - /app/node_modules
+      - /app/.next
+      - npm-cache:/root/.npm
+    command: sh -c "npm install && npm run dev -- --turbo"
+    stdin_open: true
+    tty: true
+
+  # Development overrides for orchestrator
+  orchestrator:
+    environment:
+      - DEBUG=1
+      - LOG_LEVEL=DEBUG
+      - RELOAD=true
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./adkpy/orchestrator:/app:cached
+      - ./adkpy/shared:/app/shared:cached
+      - ./adkpy/protocols:/app/protocols:cached
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload", "--log-level", "debug"]
+
+  # Development overrides for all agents
+  clarifier:
+    environment:
+      - DEBUG=1
+      - LOG_LEVEL=DEBUG
+      - RELOAD=true
+    volumes:
+      - ./adkpy/agents/clarifier:/app:cached
+      - ./adkpy/shared:/app/shared:cached
+    command: ["python", "-m", "uvicorn", "a2a_server:app", "--host", "0.0.0.0", "--port", "10001", "--reload", "--log-level", "debug"]
+
+  outline:
+    environment:
+      - DEBUG=1
+      - LOG_LEVEL=DEBUG
+      - RELOAD=true
+    volumes:
+      - ./adkpy/agents/outline:/app:cached
+      - ./adkpy/shared:/app/shared:cached
+    command: ["python", "-m", "uvicorn", "a2a_server:app", "--host", "0.0.0.0", "--port", "10002", "--reload", "--log-level", "debug"]
+
+  slide-writer:
+    environment:
+      - DEBUG=1
+      - LOG_LEVEL=DEBUG
+      - RELOAD=true
+    volumes:
+      - ./adkpy/agents/slide_writer:/app:cached
+      - ./adkpy/shared:/app/shared:cached
+    command: ["python", "-m", "uvicorn", "a2a_server:app", "--host", "0.0.0.0", "--port", "10003", "--reload", "--log-level", "debug"]
+
+  critic:
+    environment:
+      - DEBUG=1
+      - LOG_LEVEL=DEBUG
+      - RELOAD=true
+    volumes:
+      - ./adkpy/agents/critic:/app:cached
+      - ./adkpy/shared:/app/shared:cached
+    command: ["python", "-m", "uvicorn", "a2a_server:app", "--host", "0.0.0.0", "--port", "10004", "--reload", "--log-level", "debug"]
+
+  notes-polisher:
+    environment:
+      - DEBUG=1
+      - LOG_LEVEL=DEBUG
+      - RELOAD=true
+    volumes:
+      - ./adkpy/agents/notes_polisher:/app:cached
+      - ./adkpy/shared:/app/shared:cached
+    command: ["python", "-m", "uvicorn", "a2a_server:app", "--host", "0.0.0.0", "--port", "10005", "--reload", "--log-level", "debug"]
+
+  design:
+    environment:
+      - DEBUG=1
+      - LOG_LEVEL=DEBUG
+      - RELOAD=true
+    volumes:
+      - ./adkpy/agents/design:/app:cached
+      - ./adkpy/shared:/app/shared:cached
+    command: ["python", "-m", "uvicorn", "a2a_server:app", "--host", "0.0.0.0", "--port", "10006", "--reload", "--log-level", "debug"]
+
+  script-writer:
+    environment:
+      - DEBUG=1
+      - LOG_LEVEL=DEBUG
+      - RELOAD=true
+    volumes:
+      - ./adkpy/agents/script_writer:/app:cached
+      - ./adkpy/shared:/app/shared:cached
+    command: ["python", "-m", "uvicorn", "a2a_server:app", "--host", "0.0.0.0", "--port", "10007", "--reload", "--log-level", "debug"]
+
+  research:
+    environment:
+      - DEBUG=1
+      - LOG_LEVEL=DEBUG
+      - RELOAD=true
+    volumes:
+      - ./adkpy/agents/research:/app:cached
+      - ./adkpy/shared:/app/shared:cached
+    command: ["python", "-m", "uvicorn", "a2a_server:app", "--host", "0.0.0.0", "--port", "10008", "--reload", "--log-level", "debug"]
+
+  # Development overrides for MCP server
+  mcp-server:
+    environment:
+      - DEBUG=1
+      - LOG_LEVEL=DEBUG
+      - RELOAD=true
+    volumes:
+      - ./adkpy/tools/mcp_server:/app:cached
+      - ./adkpy/shared:/app/shared:cached
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8090", "--reload", "--log-level", "debug"]
+
+  # Development overrides for ArangoDB
+  arangodb:
+    environment:
+      - ARANGO_ROOT_PASSWORD=devpassword
+    volumes:
+      - arango-dev-data:/var/lib/arangodb3
+    ports:
+      - "8530:8529"
+      - "8532:8532"  # Additional debug port
+
+  # Development tools
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: presentationpro-mailhog
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    networks:
+      - backend-network
+
+  # Redis for development caching
+  redis:
+    image: redis:7-alpine
+    container_name: presentationpro-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-dev-data:/data
+    networks:
+      - backend-network
+    command: redis-server --appendonly yes
+
+volumes:
+  arango-dev-data:
+    driver: local
+  redis-dev-data:
+    driver: local

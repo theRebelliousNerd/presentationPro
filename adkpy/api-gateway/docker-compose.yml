@@ -1,0 +1,180 @@
+version: '3.8'
+
+services:
+  # A2A Orchestrator Service
+  orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: presentationpro-orchestrator
+    ports:
+      - "8080:8080"  # External API port
+    environment:
+      - ORCHESTRATOR_PORT=8080
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      # Agent URLs (Docker internal network)
+      - CLARIFIER_URL=http://clarifier:10001
+      - OUTLINE_URL=http://outline:10002
+      - SLIDE_WRITER_URL=http://slide-writer:10003
+      - CRITIC_URL=http://critic:10004
+      - NOTES_POLISHER_URL=http://notes-polisher:10005
+      - DESIGN_URL=http://design:10006
+      - SCRIPT_WRITER_URL=http://script-writer:10007
+      - RESEARCH_URL=http://research:10008
+    networks:
+      - presentationpro-network
+    depends_on:
+      - clarifier
+      - outline
+      - slide-writer
+      - critic
+      - notes-polisher
+      - design
+      - script-writer
+      - research
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # Agent Services (A2A Protocol)
+  clarifier:
+    build:
+      context: ../adkpy-microservices/agents/clarifier
+      dockerfile: Dockerfile
+    container_name: clarifier-agent
+    ports:
+      - "10001:10001"
+    environment:
+      - AGENT_PORT=10001
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+    networks:
+      - presentationpro-network
+    restart: unless-stopped
+
+  outline:
+    build:
+      context: ../adkpy-microservices/agents/outline
+      dockerfile: Dockerfile
+    container_name: outline-agent
+    ports:
+      - "10002:10002"
+    environment:
+      - AGENT_PORT=10002
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+    networks:
+      - presentationpro-network
+    restart: unless-stopped
+
+  slide-writer:
+    build:
+      context: ../adkpy-microservices/agents/slide_writer
+      dockerfile: Dockerfile
+    container_name: slide-writer-agent
+    ports:
+      - "10003:10003"
+    environment:
+      - AGENT_PORT=10003
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+    networks:
+      - presentationpro-network
+    restart: unless-stopped
+
+  critic:
+    build:
+      context: ../adkpy-microservices/agents/critic
+      dockerfile: Dockerfile
+    container_name: critic-agent
+    ports:
+      - "10004:10004"
+    environment:
+      - AGENT_PORT=10004
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+    networks:
+      - presentationpro-network
+    restart: unless-stopped
+
+  notes-polisher:
+    build:
+      context: ../adkpy-microservices/agents/notes_polisher
+      dockerfile: Dockerfile
+    container_name: notes-polisher-agent
+    ports:
+      - "10005:10005"
+    environment:
+      - AGENT_PORT=10005
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+    networks:
+      - presentationpro-network
+    restart: unless-stopped
+
+  design:
+    build:
+      context: ../adkpy-microservices/agents/design
+      dockerfile: Dockerfile
+    container_name: design-agent
+    ports:
+      - "10006:10006"
+    environment:
+      - AGENT_PORT=10006
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+    networks:
+      - presentationpro-network
+    restart: unless-stopped
+
+  script-writer:
+    build:
+      context: ../adkpy-microservices/agents/script_writer
+      dockerfile: Dockerfile
+    container_name: script-writer-agent
+    ports:
+      - "10007:10007"
+    environment:
+      - AGENT_PORT=10007
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+    networks:
+      - presentationpro-network
+    restart: unless-stopped
+
+  research:
+    build:
+      context: ../adkpy-microservices/agents/research
+      dockerfile: Dockerfile
+    container_name: research-agent
+    ports:
+      - "10008:10008"
+    environment:
+      - AGENT_PORT=10008
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - BING_SEARCH_API_KEY=${BING_SEARCH_API_KEY}
+    networks:
+      - presentationpro-network
+    restart: unless-stopped
+
+  # Supporting Services
+  arangodb:
+    image: arangodb:3.11
+    container_name: presentationpro-arangodb
+    ports:
+      - "8530:8529"
+    environment:
+      - ARANGO_NO_AUTH=1
+    volumes:
+      - arangodb-data:/var/lib/arangodb3
+      - arangodb-apps:/var/lib/arangodb3-apps
+    networks:
+      - presentationpro-network
+    restart: unless-stopped
+
+networks:
+  presentationpro-network:
+    driver: bridge
+    name: presentationpro-network
+
+volumes:
+  arangodb-data:
+  arangodb-apps:

@@ -27,8 +27,13 @@ export default function OutlineApproval({ clarifiedGoals, onApprove, onGoBack }:
         }
         const response = await getPresentationOutline(clarifiedGoals);
         setOutline(response.slideTitles);
-        const outText = response.slideTitles.join('\n');
-        addUsage({ model: 'gemini-2.5-flash', kind: 'completion', tokens: estimateTokens(outText), at: Date.now() } as any);
+        const usage = (response as any)._usage;
+        if (usage && usage.completionTokens) {
+          addUsage({ model: usage.model || 'gemini-2.5-flash', kind: 'completion', tokens: usage.completionTokens, at: Date.now() } as any);
+        } else {
+          const outText = response.slideTitles.join('\n');
+          addUsage({ model: 'gemini-2.5-flash', kind: 'completion', tokens: estimateTokens(outText), at: Date.now() } as any);
+        }
       } catch (err) {
         setError('Failed to generate an outline. Please try going back and refining your goals.');
         console.error(err);

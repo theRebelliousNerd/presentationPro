@@ -10,7 +10,7 @@ import OutlineApproval from '@/components/app/OutlineApproval';
 import GeneratingSpinner from '@/components/app/GeneratingSpinner';
 import Editor from '@/components/app/editor/Editor';
 import ErrorState from '@/components/app/ErrorState';
-import { generateSlideContent } from '@/lib/actions';
+import { generateSlideContent, critiqueSlide, retrieveContext } from '@/lib/actions';
 import { nanoid } from 'nanoid';
 
 export default function AppRoot({ presentationIdOverride }: { presentationIdOverride?: string }) {
@@ -23,6 +23,7 @@ export default function AppRoot({ presentationIdOverride }: { presentationIdOver
     resetState,
     uploadFile,
     duplicatePresentation,
+    saveNow,
   } = usePresentationState(presentationIdOverride);
 
   const [genProgress, setGenProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
@@ -53,11 +54,47 @@ export default function AppRoot({ presentationIdOverride }: { presentationIdOver
     setGenProgress({ current: 0, total: outline.length });
     try {
       const generated: Slide[] = [];
+      // Build assets list from uploaded files to inform AI generation
+      const allFiles = [...(presentation.initialInput.files || []), ...(presentation.initialInput.styleFiles || [])];
+      const assets = allFiles.map(f => ({
+        name: f.name,
+        url: f.url,
+        kind: f.kind || (/(png|jpg|jpeg|gif|webp|svg)$/i.test(f.name) ? 'image' : /(pdf|docx|md|txt|csv|xls|xlsx)$/i.test(f.name) ? 'document' : 'other'),
+      }));
       for (let i = 0; i < outline.length; i++) {
         if (cancelGenerationRef.current) break;
         const title = outline[i];
-        const [slide] = await generateSlideContent({ outline: [title] });
-        const withId: Slide = { ...slide, id: nanoid(), imageState: 'loading' };
+        // Pull top context chunks from orchestrator graph RAG (if enabled)
+        let contextAssets = assets;
+        try {
+          const chunks = await retrieveContext(presentation.id, title, 5);
+          if (chunks.length) {
+            contextAssets = [
+              ...assets,
+              ...chunks.map((c) => ({ name: c.name, url: '', kind: 'document' as const, text: c.text } as any)),
+            ];
+          }
+        } catch {}
+        const [rawSlide] = await generateSlideContent({ outline: [title], assets: contextAssets });
+        // Critique + revise pass
+        const improved = await critiqueSlide({ title: (rawSlide as any).title, content: (rawSlide as any).content, speakerNotes: (rawSlide as any).speakerNotes, imagePrompt: (rawSlide as any).imagePrompt }, {
+          audience: presentation.initialInput.audience,
+          tone: `formality:${presentation.initialInput.tone.formality}/energy:${presentation.initialInput.tone.energy}`,
+          length: presentation.initialInput.length as any,
+          assets: allFiles as any,
+        });
+        const useAsset = (rawSlide as any).useAssetImageUrl || (rawSlide as any).assetImageUrl;
+        const withId: Slide = {
+          title: improved.title,
+          content: improved.content,
+          speakerNotes: improved.speakerNotes,
+          imagePrompt: (rawSlide as any).imagePrompt,
+          id: nanoid(),
+          imageState: useAsset ? 'done' : 'loading',
+          assetImageUrl: useAsset || undefined,
+          useGeneratedImage: !useAsset,
+          imageUrl: useAsset || undefined,
+        } as Slide;
         generated.push(withId);
         setPresentation(prev => ({ ...prev, slides: [...generated] }));
         setGenProgress({ current: i + 1, total: outline.length });
@@ -99,6 +136,9 @@ export default function AppRoot({ presentationIdOverride }: { presentationIdOver
         return <Editor
           slides={presentation.slides}
           setSlides={(slides: Slide[]) => setPresentation(prev => ({...prev, slides}))}
+          presentation={presentation}
+          setPresentation={setPresentation}
+          uploadFile={uploadFile}
           />;
       case 'error':
         return <ErrorState onReset={resetState} />
@@ -109,7 +149,7 @@ export default function AppRoot({ presentationIdOverride }: { presentationIdOver
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
-      <Header onReset={resetState} onSaveCopy={async () => { await duplicatePresentation(); }} />
+      <Header onReset={resetState} onSaveCopy={async () => { await duplicatePresentation(); }} onSaveNow={async () => { await saveNow(); }} />
       <main className="flex-grow flex flex-col items-center justify-center p-8 sm:p-12 md:p-16">
         {renderState()}
       </main>

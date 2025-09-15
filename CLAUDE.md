@@ -4,86 +4,150 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is the Next-Gen Presentation Studio - an AI-powered presentation creation tool using Next.js, TypeScript, and Google Genkit AI. The app guides users through creating presentations via AI assistance, from initial input through clarification, outline approval, content generation, and editing.
+Next-Gen Presentation Studio - An AI-powered presentation creation tool that guides users through a multi-step process to create presentations using Google's Agent Development Kit (ADK) and Agent-to-Agent (A2A) protocol.
 
 ## Development Commands
 
 ```bash
-# Development server (runs on port 3000 - DO NOT CHANGE)
-npm run dev
+# Frontend Development (MUST use port 3000)
+npm run dev                  # Next.js with Turbopack
+npm run build               # Production build
+npm run start               # Production server
+npm run lint                # ESLint
+npm run typecheck           # TypeScript checking
 
-# Genkit AI development server
-npm run genkit:dev
-npm run genkit:watch  # With auto-reload
+# Docker Development (Recommended)
+docker compose up --build web       # Frontend only
+docker compose up --build           # Full stack with all services
+docker compose up --build web adkpy arangodb  # Full stack with ADK backend
 
-# Build and production
-npm run build
-npm run start
-
-# Code quality
-npm run lint
-npm run typecheck
+# Backend Services
+docker compose up -d adkpy          # Python ADK/A2A orchestrator (port 8089)
+docker compose up -d arangodb       # Graph database (port 8530)
 ```
 
 ## Architecture Overview
 
+### AI Backend System (ADK/A2A)
+
+The app uses Google's Agent Development Kit (ADK) with Agent-to-Agent (A2A) protocol:
+
+- **Architecture**: Python FastAPI backend with ADK agent wrappers
+- **Multi-agent orchestration**: Each agent specializes in a specific task
+- **Agents**: Clarifier, Outline, SlideWriter, Critic, NotesPolisher, Design, ScriptWriter, Research
+- **Model Configuration**: Per-agent model selection via Settings panel
+- **Backend**: Runs on port 8089 (exposed) / 8088 (internal Docker)
+
+**Model Configuration Flow**:
+1. User selects models in Settings → Saved to localStorage
+2. Frontend sends model with each request (textModel, writerModel, criticModel)
+3. Agent wrappers receive and use specified models
+4. Model names normalized (strips "googleai/" prefix)
+
 ### Application Flow States
+
 The app progresses through distinct states (`src/lib/types.ts`):
-1. `initial` - User provides text, files, presentation parameters
-2. `clarifying` - AI chat to refine goals
+1. `initial` - User input (text, files, parameters)
+2. `clarifying` - AI chat to refine goals (Context Meter tracks understanding)
 3. `approving` - User reviews generated outline
 4. `generating` - AI creates slide content
 5. `editing` - User refines presentation
-6. `error` - Error handling state
+6. `error` - Error handling
 
-### Core Structure
+### Core Architecture
 
-**AI Integration (`src/ai/`)**
-- `genkit.ts` - Genkit configuration with Google AI (Gemini 2.5 Flash)
-- `flows/` - AI workflows for presentation generation:
-  - `refine-presentation-goals.ts` - Clarification chat
-  - `generate-presentation-outline.ts` - Outline creation
-  - `generate-slide-content.ts` - Content generation
-  - `generate-and-edit-images.ts` - Image generation
-  - `rephrase-speaker-notes.ts` - Notes editing
-
-**State Management**
-- `src/hooks/use-presentation-state.ts` - Custom hook managing presentation data and app state
-- Data persisted in localStorage as `presentation` object
-
-**Component Structure**
+**Frontend (Next.js 15.3.3)**
 - `src/app/page.tsx` - Main orchestrator component
-- `src/components/app/` - Application-specific components for each flow state
-- `src/components/ui/` - Reusable UI components (shadcn/ui based)
+- `src/lib/orchestrator.ts` - ADK backend client
+- `src/lib/actions.ts` - Server actions that route to ADK backend
+- `src/hooks/use-presentation-state.ts` - State management with localStorage persistence
+- `src/lib/agent-models.ts` - Model configuration for each agent
+
+**ADK Backend (`adkpy/`)**
+- `app/main.py` - FastAPI endpoints (`/v1/clarify`, `/v1/outline`, `/v1/slide`, etc.)
+- `app/llm.py` - Gemini API wrapper (strips "googleai/" prefix from model names)
+- `agents/wrappers.py` - Agent wrapper classes with model configuration support
+- `agents/` - Individual microservice agent directories
+- `tools/` - ArangoGraphRAG, WebSearch, Telemetry, AssetsIngest
+- `a2a/` - Protocol definitions and policies
+
+**Database**
+- ArangoDB for Graph RAG (port 8530)
+- Used for document ingestion and retrieval
+
+### Key Integration Points
+
+1. **Model Configuration**: Settings panel → localStorage → agent wrappers → LLM calls
+2. **Model Name Format**: Frontend sends `googleai/gemini-2.5-flash`, backend strips prefix
+3. **Docker Networking**: Frontend uses `ADK_BASE_URL=http://adkpy:8088` internally
+4. **Token Tracking**: Telemetry tool tracks usage across all agents
+5. **File Processing**: Assets are enriched with text extraction before AI processing
+
+### Environment Variables
+
+```bash
+# Required
+GOOGLE_GENAI_API_KEY=your_api_key_here
+
+# ADK/A2A Configuration
+ORCH_MODE=adk                    # or "local" for Genkit
+ADK_BASE_URL=http://adkpy:8088  # Docker internal URL
+NEXT_PUBLIC_ORCH_MODE=adk       # Client-side flag
+
+# Optional
+BING_SEARCH_API_KEY=...          # For web search (falls back to DuckDuckGo)
+WEB_SEARCH_CACHE=.cache/web-search.json
+NEXT_PUBLIC_LOCAL_UPLOADS=true  # Store uploads locally vs Firebase
+NEXT_PUBLIC_DISABLE_FIRESTORE=true
+```
 
 ### Design System
 
-The app follows the Next-Gen Engineering brand guidelines:
 - **Colors**: Deep Navy (#192940), Action Green (#73BF50), Slate Blue (#556273)
 - **Typography**: Montserrat (headings), Roboto (body)
 - **Spacing**: 8px grid system
-- **Logo**: Located in `/public/Next-Gen-logos/`
+- **Components**: shadcn/ui with Radix UI primitives
 
-### Key Dependencies
-- **Next.js 15.3.3** with App Router
-- **Genkit 1.14.1** for AI workflows
-- **Google AI** for Gemini integration
-- **Tailwind CSS** for styling
-- **Radix UI** for accessible components
-- **React Hook Form** with Zod validation
+### Common Issues & Solutions
 
-### Environment Setup
+1. **AI not responding**: Check Docker logs `docker logs presentationpro-adkpy-1`
+   - Model name format error: Backend needs to strip "googleai/" prefix
+   - API key issues: Verify `GOOGLE_GENAI_API_KEY` is set
 
-Required environment variable:
+2. **Port conflicts**: Frontend MUST use port 3000 (hardcoded)
+
+3. **Docker volume mounts**: Changes to Python code require container restart:
+   ```bash
+   docker compose restart adkpy
+   ```
+
+### Testing Specific Features
+
+```bash
+# Test ADK backend health
+curl http://localhost:8089/health
+
+# Monitor backend logs
+docker logs -f presentationpro-adkpy-1
+
+# Check all services
+docker compose ps
 ```
-GOOGLE_GENAI_API_KEY=your_api_key_here
-```
 
-### Important Notes
+### Data Flow for Presentation Generation
 
-- Port 3000 is hardcoded for the dev server - DO NOT CHANGE
-- The app uses Turbopack in development for faster builds
-- Images are generated asynchronously after slides are created
-- Presentation data auto-saves to localStorage
-- Firebase integration is configured but implementation details vary by deployment
-- remember never to change port numbers
+1. User input → Server action (`src/lib/actions.ts`)
+2. Route to ADK backend via orchestrator client
+3. Python backend orchestrates agents sequentially
+4. Results returned and stored in localStorage
+5. UI updates based on state changes
+
+### Important Implementation Details
+
+- Presentation data persists in localStorage as `presentation` object
+- Images generated asynchronously after slides
+- Context Meter (25-100%) guides clarification depth
+- Agent models configurable per-agent in Settings
+- File uploads processed for text extraction before AI analysis
+- Web search uses cache to reduce API calls
+- use uv for all installs and dependencies

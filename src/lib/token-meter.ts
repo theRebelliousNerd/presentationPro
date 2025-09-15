@@ -39,6 +39,10 @@ function readPricing() {
 
 let { pricePrompt, priceCompletion, priceImageCall } = readPricing();
 
+export function getPricing() {
+  return { pricePrompt, priceCompletion, priceImageCall };
+}
+
 export function setPricing(p: { pricePrompt?: number; priceCompletion?: number; priceImageCall?: number }) {
   try {
     const merged = { pricePrompt, priceCompletion, priceImageCall, ...p };

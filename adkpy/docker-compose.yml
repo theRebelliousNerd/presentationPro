@@ -1,0 +1,223 @@
+version: '3.9'
+
+services:
+  # Orchestrator Service
+  orchestrator:
+    build:
+      context: ./orchestrator
+      dockerfile: Dockerfile
+    container_name: presentationpro-orchestrator
+    environment:
+      - ORCHESTRATOR_PORT=8088
+      - MCP_SERVER_URL=http://mcp-server:8090
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+    ports:
+      - "8088:8088"
+    depends_on:
+      - clarifier
+      - outline
+      - slide-writer
+      - critic
+      - notes-polisher
+      - design
+      - script-writer
+      - research
+      - mcp-server
+    networks:
+      - presentation-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Clarifier Agent
+  clarifier:
+    build:
+      context: ./agents/clarifier
+      dockerfile: Dockerfile
+    container_name: presentationpro-clarifier
+    environment:
+      - PORT=8001
+      - PUBLIC_URL=http://clarifier:8001
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - CLARIFIER_MODEL=${CLARIFIER_MODEL:-googleai/gemini-2.5-flash}
+    networks:
+      - presentation-network
+    restart: unless-stopped
+
+  # Outline Agent
+  outline:
+    build:
+      context: ./agents/outline
+      dockerfile: Dockerfile
+    container_name: presentationpro-outline
+    environment:
+      - PORT=8002
+      - PUBLIC_URL=http://outline:8002
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - OUTLINE_MODEL=${OUTLINE_MODEL:-googleai/gemini-2.5-flash}
+    networks:
+      - presentation-network
+    restart: unless-stopped
+
+  # Slide Writer Agent
+  slide-writer:
+    build:
+      context: ./agents/slide_writer
+      dockerfile: Dockerfile
+    container_name: presentationpro-slide-writer
+    environment:
+      - PORT=8003
+      - PUBLIC_URL=http://slide-writer:8003
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - SLIDE_WRITER_MODEL=${SLIDE_WRITER_MODEL:-googleai/gemini-2.5-flash}
+    networks:
+      - presentation-network
+    restart: unless-stopped
+
+  # Critic Agent
+  critic:
+    build:
+      context: ./agents/critic
+      dockerfile: Dockerfile
+    container_name: presentationpro-critic
+    environment:
+      - PORT=8004
+      - PUBLIC_URL=http://critic:8004
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - CRITIC_MODEL=${CRITIC_MODEL:-googleai/gemini-2.5-flash}
+    networks:
+      - presentation-network
+    restart: unless-stopped
+
+  # Notes Polisher Agent
+  notes-polisher:
+    build:
+      context: ./agents/notes_polisher
+      dockerfile: Dockerfile
+    container_name: presentationpro-notes-polisher
+    environment:
+      - PORT=8005
+      - PUBLIC_URL=http://notes-polisher:8005
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - NOTES_MODEL=${NOTES_MODEL:-googleai/gemini-2.5-flash}
+    networks:
+      - presentation-network
+    restart: unless-stopped
+
+  # Design Agent
+  design:
+    build:
+      context: ./agents/design
+      dockerfile: Dockerfile
+    container_name: presentationpro-design
+    environment:
+      - PORT=8006
+      - PUBLIC_URL=http://design:8006
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - DESIGN_MODEL=${DESIGN_MODEL:-googleai/gemini-2.5-flash}
+    networks:
+      - presentation-network
+    restart: unless-stopped
+
+  # Script Writer Agent
+  script-writer:
+    build:
+      context: ./agents/script_writer
+      dockerfile: Dockerfile
+    container_name: presentationpro-script-writer
+    environment:
+      - PORT=8007
+      - PUBLIC_URL=http://script-writer:8007
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - SCRIPT_MODEL=${SCRIPT_MODEL:-googleai/gemini-2.5-flash}
+    networks:
+      - presentation-network
+    restart: unless-stopped
+
+  # Research Agent
+  research:
+    build:
+      context: ./agents/research
+      dockerfile: Dockerfile
+    container_name: presentationpro-research
+    environment:
+      - PORT=8008
+      - PUBLIC_URL=http://research:8008
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - RESEARCH_MODEL=${RESEARCH_MODEL:-googleai/gemini-2.5-flash}
+    networks:
+      - presentation-network
+    restart: unless-stopped
+
+  # MCP Server for Tools
+  mcp-server:
+    build:
+      context: ./tools/mcp_server
+      dockerfile: Dockerfile
+    container_name: presentationpro-mcp-server
+    environment:
+      - MCP_PORT=8090
+      - ARANGO_URL=http://arangodb:8529
+      - ARANGO_PASSWORD=${ARANGO_ROOT_PASSWORD:-root}
+      - BING_SEARCH_API_KEY=${BING_SEARCH_API_KEY}
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+    depends_on:
+      - arangodb
+    networks:
+      - presentation-network
+    restart: unless-stopped
+
+  # ArangoDB for Graph RAG
+  arangodb:
+    image: arangodb:3.11
+    container_name: presentationpro-arangodb
+    environment:
+      - ARANGO_ROOT_PASSWORD=${ARANGO_ROOT_PASSWORD:-root}
+    ports:
+      - "${ARANGO_HOST_PORT:-8530}:8529"
+    volumes:
+      - arango-data:/var/lib/arangodb3
+    networks:
+      - presentation-network
+    restart: unless-stopped
+
+  # Service Registry (Optional - for production)
+  # consul:
+  #   image: consul:latest
+  #   container_name: presentationpro-consul
+  #   ports:
+  #     - "8500:8500"
+  #   networks:
+  #     - presentation-network
+  #   command: agent -server -bootstrap -ui -client=0.0.0.0
+
+  # Monitoring Stack (Optional)
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   container_name: presentationpro-prometheus
+  #   volumes:
+  #     - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+  #   ports:
+  #     - "9090:9090"
+  #   networks:
+  #     - presentation-network
+
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   container_name: presentationpro-grafana
+  #   ports:
+  #     - "3001:3000"
+  #   networks:
+  #     - presentation-network
+
+networks:
+  presentation-network:
+    driver: bridge
+    name: presentationpro-network
+
+volumes:
+  arango-data:
+    driver: local

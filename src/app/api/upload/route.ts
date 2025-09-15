@@ -15,6 +15,18 @@ export async function POST(request: Request) {
     const originalName = (form.get('filename') as string) || (file as any).name || 'upload.bin';
     const safeName = originalName.replace(/[^\w\-.]+/g, '_');
 
+    // Basic validation: size and allowed extensions
+    const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+    const size = (file as any).size ?? 0;
+    if (size > MAX_SIZE_BYTES) {
+      return NextResponse.json({ error: 'File too large (max 10MB)' }, { status: 413 });
+    }
+    const ext = (safeName.split('.').pop() || '').toLowerCase();
+    const allowedExt = new Set(['pdf','docx','md','markdown','txt','csv','png','jpg','jpeg','webp','gif','svg']);
+    if (!allowedExt.has(ext)) {
+      return NextResponse.json({ error: `Unsupported file type .${ext}` }, { status: 400 });
+    }
+
     const buffer = Buffer.from(await file.arrayBuffer());
     const uploadDir = path.join(process.cwd(), 'public', 'uploads', presentationId);
     const filePath = path.join(uploadDir, safeName);
@@ -29,4 +41,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
   }
 }
-

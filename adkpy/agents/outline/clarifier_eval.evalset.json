@@ -1,0 +1,32 @@
+{
+  "eval_set_id": "outline_eval",
+  "name": "Outline Agent Evaluation",
+  "description": "Tests the outline agent's ability to generate a structured slide outline from clarified goals.",
+  "eval_cases": [
+    {
+      "eval_id": "standard_outline",
+      "conversation": [
+        {
+          "invocation_id": "eval-outline-1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "{\"clarifiedContent\": \"A 30-minute technical presentation on AI in healthcare for medical professionals. Key topics: current applications, future potential, and implementation challenges.\", \"constraints\": {\"max_slides\": 8}}"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"outline\": [\"Introduction to AI in Healthcare\", \"Current AI Diagnostic Applications\", \"Case Study: AI in Radiology\", \"The Future of AI in Patient Care\", \"Key Implementation Challenges\", \"Building an AI-Ready Infrastructure\", \"Ethical Considerations in Medical AI\", \"Conclusion and Next Steps\"]}"
+              }
+            ],
+            "role": null
+          }
+        }
+      ],
+      "session_input": { "app_name": "outline", "user_id": "user" }
+    }
+  ]
+}

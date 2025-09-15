@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, Trash2 } from 'lucide-react';
 import { Slide } from '@/lib/types';
 import SlideCard from './SlideCard';
+import ResearchHelper from './ResearchHelper';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,7 +55,7 @@ export default function SlideSidebar({
   };
 
   return (
-    <aside className="w-64 h-full flex-shrink-0 bg-card rounded-lg shadow-lg flex flex-col p-4">
+    <aside className="w-64 h-full flex-shrink-0 bg-card rounded-lg shadow-lg flex flex-col p-4 md-surface md-elevation-2">
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-headline text-lg font-semibold">Slides</h2>
         <Button variant="ghost" size="icon" onClick={addSlide}>
@@ -105,6 +106,12 @@ export default function SlideSidebar({
           ))}
         </div>
       </ScrollArea>
+      <ResearchHelper onInsert={(rules) => {
+        if (!activeSlideId) return;
+        const text = rules.map(r => `• ${r}`).join('\n');
+        const updated = slides.map(s => s.id === activeSlideId ? { ...s, speakerNotes: (s.speakerNotes ? (s.speakerNotes + '\n\n') : '') + text } : s);
+        setSlides(updated);
+      }} />
     </aside>
   );
 }

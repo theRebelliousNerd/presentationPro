@@ -15,6 +15,15 @@ export type Slide = {
   imageState?: 'loading' | 'error' | 'done';
   useGeneratedImage?: boolean;
   assetImageUrl?: string;
+  designCode?: { css?: string; svg?: string };
+  // Per-slide constraint overrides
+  useConstraints?: boolean; // true=use global (default), false=use overrides
+  constraintsOverride?: {
+    citationsRequired?: boolean;
+    slideDensity?: 'light' | 'normal' | 'dense';
+    mustInclude?: string[];
+    mustAvoid?: string[];
+  };
 };
 
 export type UploadedFileRef = {
@@ -38,6 +47,32 @@ export type Presentation = {
     subIndustry: string;
     tone: { formality: number; energy: number };
     graphicStyle: string;
+    // Advanced clarity fields (optional)
+    objective?: string;
+    keyMessages?: string[];
+    mustInclude?: string[];
+    mustAvoid?: string[];
+    callToAction?: string;
+    audienceExpertise?: 'beginner' | 'intermediate' | 'expert';
+    timeConstraintMin?: number;
+    successCriteria?: string[];
+    citationsRequired?: boolean;
+    slideDensity?: 'light' | 'normal' | 'dense';
+    language?: string;
+    locale?: string;
+    readingLevel?: 'basic' | 'intermediate' | 'advanced';
+    brandColors?: string[];
+    brandFonts?: string[];
+    logoUrl?: string;
+    presentationMode?: 'in-person' | 'virtual' | 'hybrid';
+    screenRatio?: '16:9' | '4:3' | '1:1';
+    referenceStyle?: 'apa' | 'mla' | 'chicago' | 'none';
+    allowedSources?: string[]; // domains
+    bannedSources?: string[];
+    accessibility?: { highContrast?: boolean; captions?: boolean; altTextRequired?: boolean };
+    animationLevel?: 'none' | 'minimal' | 'moderate' | 'high';
+    interactivity?: { polls?: boolean; quizzes?: boolean };
+    disclaimers?: string;
   };
   chatHistory: ChatMessage[];
   clarifiedGoals: string;

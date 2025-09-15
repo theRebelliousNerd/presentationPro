@@ -1,0 +1,66 @@
+import os
+import time
+import google.generativeai as genai
+
+
+GOOGLE_API_KEY = os.environ.get("GOOGLE_GENAI_API_KEY")
+if GOOGLE_API_KEY:
+    genai.configure(api_key=GOOGLE_API_KEY)
+
+
+def estimate_tokens(text: str) -> int:
+    return max(1, round(len(text or "") / 4))
+
+
+def call_text_model(model: str, prompt_parts):
+    """Call Gemini text model and return (text, usage, duration_ms)."""
+    start = time.time()
+
+    # Strip the "googleai/" prefix if present for Gemini API compatibility
+    if model and model.startswith("googleai/"):
+        model = model[9:]  # Remove "googleai/" prefix
+
+    usage = {"promptTokens": 0, "completionTokens": 0, "model": model}
+    text = ""
+    try:
+        m = genai.GenerativeModel(model)
+        resp = m.generate_content(prompt_parts)
+        duration_ms = int((time.time() - start) * 1000)
+        try:
+            # usage_metadata available on candidates or response
+            um = getattr(resp, 'usage_metadata', None)
+            if um:
+                usage["promptTokens"] = getattr(um, 'prompt_token_count', 0)
+                usage["completionTokens"] = getattr(um, 'candidates_token_count', 0)
+        except Exception:
+            pass
+        text = (resp.text or "").strip()
+        if not usage["promptTokens"] and not usage["completionTokens"]:
+            # heuristic fallback
+            joined = "\n".join([p.get('text','') if isinstance(p, dict) else str(p) for p in prompt_parts])
+            usage["promptTokens"] = estimate_tokens(joined)
+            usage["completionTokens"] = estimate_tokens(text)
+        return text, usage, duration_ms
+    except Exception as e:
+        # Log a concise error for diagnostics without leaking prompts
+        try:
+            print(f"LLM error: {e}", flush=True)
+        except Exception:
+            pass
+        duration_ms = int((time.time() - start) * 1000)
+        # conservative heuristic on failure
+        return text, usage, duration_ms
+
+
+def analyze_screenshot_contrast(png_bytes: bytes):
+    try:
+        from PIL import Image, ImageStat
+        import io
+        im = Image.open(io.BytesIO(png_bytes)).convert('L')
+        stat = ImageStat.Stat(im)
+        mean = stat.mean[0]
+        # rough variance proxy
+        var = stat.var[0]
+        return {"mean": mean, "variance": var}
+    except Exception:
+        return None

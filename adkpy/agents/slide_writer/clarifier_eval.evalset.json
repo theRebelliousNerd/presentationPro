@@ -1,0 +1,32 @@
+{
+  "eval_set_id": "slide_writer_eval",
+  "name": "Slide Writer Agent Evaluation",
+  "description": "Tests the slide writer's ability to generate complete slide content from a title.",
+  "eval_cases": [
+    {
+      "eval_id": "generate_content_slide",
+      "conversation": [
+        {
+          "invocation_id": "eval-slidewriter-1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "{\"title\": \"Current AI Diagnostic Applications\", \"assets\": [{\"name\": \"radiology_study.pdf\", \"text\": \"A 2024 study showed AI models achieved 95% accuracy in detecting early-stage cancers from medical scans.\"}]}"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"title\": \"Current AI Diagnostic Applications\", \"content\": [\"Achieved 95% accuracy in recent studies\", \"Reduces diagnostic time significantly\", \"Enhances early-stage cancer detection\"], \"speakerNotes\": \"Discuss the 95% accuracy stat from the 2024 study. Emphasize how this technology supports, not replaces, medical professionals.\", \"imagePrompt\": \"A medical professional examining a high-resolution medical scan on a futuristic computer interface with AI overlays highlighting key areas.\"}"
+              }
+            ],
+            "role": null
+          }
+        }
+      ],
+      "session_input": { "app_name": "slide_writer", "user_id": "user" }
+    }
+  ]
+}

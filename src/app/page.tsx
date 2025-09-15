@@ -3,16 +3,20 @@
 import { usePresentationState } from '@/hooks/use-presentation-state';
 import { Slide } from '@/lib/types';
 import Header from '@/components/app/Header';
+import DashboardShell from '@/components/app/dashboard/DashboardShell';
+import TopStats from '@/components/app/dashboard/TopStats';
 import InitialInput from '@/components/app/InitialInput';
-import ClarificationChat from '@/components/app/ClarificationChat';
 import OutlineApproval from '@/components/app/OutlineApproval';
 import GeneratingSpinner from '@/components/app/GeneratingSpinner';
 import Editor from '@/components/app/editor/Editor';
 import ErrorState from '@/components/app/ErrorState';
 import { generateSlideContent } from '@/lib/actions';
 import { nanoid } from 'nanoid';
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { addUsage, estimateTokens } from '@/lib/token-meter';
+import ClarificationChat from '@/components/app/ClarificationChat';
+import { Button } from '@/components/ui/button';
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 export default function Home() {
   const {
@@ -28,6 +32,24 @@ export default function Home() {
 
   const [genProgress, setGenProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
   const cancelGenerationRef = useRef(false);
+  const [chatCollapsed, setChatCollapsed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try { return localStorage.getItem('chat.collapsed') === 'true'; } catch { return false }
+  });
+  // Auto-collapse when viewport is narrower and no prior preference
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const hasPref = localStorage.getItem('chat.collapsed');
+      if (!hasPref) {
+        const w = window.innerWidth;
+        if (w < 1440) setChatCollapsed(true);
+      }
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try { localStorage.setItem('chat.collapsed', String(chatCollapsed)); } catch {}
+  }, [chatCollapsed]);
 
   const handleStartClarifying = (values: {
     text: string;
@@ -63,7 +85,13 @@ export default function Home() {
           ...(presentation.initialInput.files || []).map(f => ({ name: f.name, url: f.url, kind: f.kind || (isImageUrl(f.url) ? 'image' : 'document') })),
           ...(presentation.initialInput.styleFiles || []).map(f => ({ name: f.name, url: f.url, kind: f.kind || (isImageUrl(f.url) ? 'image' : 'document') })),
         ];
-        const [slide] = await generateSlideContent({ outline: [title], assets });
+        const constraints = {
+          citationsRequired: presentation.initialInput.citationsRequired,
+          slideDensity: presentation.initialInput.slideDensity,
+          mustInclude: presentation.initialInput.mustInclude,
+          mustAvoid: presentation.initialInput.mustAvoid,
+        } as any;
+        const [slide] = await generateSlideContent({ outline: [title], assets, constraints });
         const withId: Slide = { ...slide, id: nanoid(), imageState: 'loading', useGeneratedImage: true };
         if ((slide as any).useAssetImageUrl) {
           withId.imageUrl = (slide as any).useAssetImageUrl;
@@ -125,13 +153,58 @@ export default function Home() {
     }
   };
 
-  return (
-    <div className="flex flex-col min-h-screen bg-background">
-      <Header onReset={resetState} onSaveCopy={async () => { await duplicatePresentation(); }} />
-      <main className="flex-grow flex flex-col items-center justify-center p-8 sm:p-12 md:p-16">
-        {renderState()}
-      </main>
+  const leftChat = (
+    <div className="hidden lg:block">
+      {!chatCollapsed ? (
+        <ClarificationChat
+          compact
+          presentation={presentation}
+          setPresentation={setPresentation}
+          onClarificationComplete={(goals)=>{ setPresentation(prev=>({...prev, clarifiedGoals: goals})); setAppState('approving'); }}
+          uploadFile={uploadFile}
+        />
+      ) : null}
     </div>
+  );
+
+  return (
+    <DashboardShell>
+      <div className="flex flex-col min-h-screen bg-background">
+        <Header onReset={resetState} onSaveCopy={async () => { await duplicatePresentation(); }} />
+        <main className="flex-grow flex flex-col p-4 sm:p-6 md:p-8 gap-6">
+        {/* Top stats */}
+        <TopStats />
+        {/* Chat toggle (large screens) */}
+        <div className="hidden lg:flex fixed left-2 top-[88px] z-20">
+          <Button size="sm" variant="outline" onClick={() => setChatCollapsed(v => !v)}>
+            {chatCollapsed ? (<><PanelLeftOpen className="h-4 w-4 mr-2"/>Show Chat</>) : (<><PanelLeftClose className="h-4 w-4 mr-2"/>Hide Chat</>)}
+          </Button>
+        </div>
+        <div className="w-full flex gap-6">
+          {leftChat}
+          <div className="flex-grow flex justify-center">
+            <div className="w-full max-w-5xl">
+              {/* Clarifying state: if left chat is collapsed on large screens, show chat here */}
+              {appState === 'clarifying' ? (
+                chatCollapsed ? (
+                  <ClarificationChat
+                    presentation={presentation}
+                    setPresentation={setPresentation}
+                    onClarificationComplete={(goals) => { setPresentation(prev => ({...prev, clarifiedGoals: goals})); setAppState('approving'); }}
+                    uploadFile={uploadFile}
+                  />
+                ) : (
+                  <div className="hidden lg:block">{/* Content handled by left chat when expanded */}</div>
+                )
+              ) : (
+                <>{renderState()}</>
+              )}
+            </div>
+          </div>
+        </div>
+        </main>
+      </div>
+    </DashboardShell>
   );
 }
 

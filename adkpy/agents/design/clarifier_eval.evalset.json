@@ -1,0 +1,31 @@
+{
+  "eval_set_id": "design_eval",
+  "name": "Design Agent Evaluation",
+  "description": "Tests the design agent's ability to generate both code and prompt-based designs.",
+  "eval_cases": [
+    {
+      "eval_id": "generate_code_design",
+      "conversation": [
+        {
+          "invocation_id": "eval-design-code-1",
+          "user_content": { "parts": [{ "text": "{\"slide\": {\"title\": \"Our Q3 Financials\"}, \"theme\": \"brand\", \"pattern\": \"grid\"}" }], "role": "user" }
+          },
+          "final_response": { "parts": [{ "text": "{\"type\": \"code\", \"code\": {\"css\": \"linear-gradient(135deg, rgba(46,204,113,0.25), rgba(52,152,219,0.25))\", \"svg\": \"<svg xmlns='http://www.w3.org/2000/svg' width='1280' height='720'><defs><pattern id='grid' width='40' height='40' patternUnits='userSpaceOnUse'><path d='M 40 0 L 0 0 0 40' fill='none' stroke='rgba(255,255,255,0.08)' stroke-width='1'/></pattern></defs><rect width='100%' height='100%' fill='url(#grid)' /></svg>\"}, \"prompt\": null}" }], "role": null }
+        }
+      ],
+      "session_input": { "app_name": "design", "user_id": "user" }
+    },
+    {
+      "eval_id": "generate_prompt_design",
+      "conversation": [
+        {
+          "invocation_id": "eval-design-prompt-1",
+          "user_content": { "parts": [{ "text": "{\"slide\": {\"title\": \"Future Innovations\"}, \"theme\": \"dark\", \"pattern\": \"gradient\"}" }], "role": "user" }
+          },
+          "final_response": { "parts": [{ "text": "{\"type\": \"prompt\", \"code\": null, \"prompt\": \"Abstract dark background with subtle, deep blue and purple gradients. Professional, minimalist, and designed for high text legibility. No text or logos.\"}" }], "role": null }
+        }
+      ],
+      "session_input": { "app_name": "design", "user_id": "user" }
+    }
+  ]
+}

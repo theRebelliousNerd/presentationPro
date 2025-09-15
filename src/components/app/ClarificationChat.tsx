@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, User, Bot, Loader2, Lightbulb } from 'lucide-react';
-import { getClarification } from '@/lib/actions';
+import { getClarification, ingestAssets } from '@/lib/actions';
 import { Presentation, ChatMessage, UploadedFileRef } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
@@ -19,6 +19,7 @@ type ClarificationChatProps = {
   setPresentation: Dispatch<SetStateAction<Presentation>>;
   onClarificationComplete: (finalGoals: string) => void;
   uploadFile: (file: File) => Promise<UploadedFileRef>;
+  compact?: boolean;
 };
 
 const CONTEXT_SUGGESTIONS = [
@@ -30,7 +31,7 @@ const CONTEXT_SUGGESTIONS = [
   'Mention any important competitors or market context.',
 ];
 
-export default function ClarificationChat({ presentation, setPresentation, onClarificationComplete, uploadFile }: ClarificationChatProps) {
+export default function ClarificationChat({ presentation, setPresentation, onClarificationComplete, uploadFile, compact = false }: ClarificationChatProps) {
   const [input, setInput] = useState('');
   const [newRawFiles, setNewRawFiles] = useState<File[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -57,6 +58,17 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
           const aiResponseContent = response.refinedGoals.trim();
           const newAiMessage: ChatMessage = { id: nanoid(), role: 'model', content: aiResponseContent, createdAt: Date.now() };
           setPresentation(prev => ({ ...prev, chatHistory: [newAiMessage] }));
+          // If backend returned a structured patch, merge into initialInput
+          const patch = (response as any).initialInputPatch as any;
+          if (patch && typeof patch === 'object') {
+            setPresentation(prev => ({ ...prev, initialInput: { ...prev.initialInput, ...patch } }));
+          }
+          // Telemetry
+          const usage = (response as any).usage;
+          if (usage) {
+            if (usage.promptTokens) addUsage({ model: usage.model || 'gemini-2.5-flash', kind: 'prompt', tokens: usage.promptTokens, at: Date.now() } as any);
+            if (usage.completionTokens) addUsage({ model: usage.model || 'gemini-2.5-flash', kind: 'completion', tokens: usage.completionTokens, at: Date.now() } as any);
+          }
         } catch (error) {
           console.error("Failed to get initial message:", error);
           const errorMessage: ChatMessage = { id: nanoid(), role: 'model', content: 'Sorry, I encountered an error starting the chat. Please try refreshing.', createdAt: Date.now() };
@@ -100,6 +112,12 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
         try {
           const uploadedFile = await uploadFile(file);
           uploadedFileInfos.push(uploadedFile);
+          // Ingest into orchestrator graph RAG (if enabled)
+          try {
+            if (presentation.id) {
+              await ingestAssets(presentation.id, [uploadedFile]);
+            }
+          } catch {}
         } catch (error) {
           console.error(`Failed to upload file ${file.name}:`, error);
           setIsLoading(false);
@@ -131,13 +149,21 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
           files: [...prev.initialInput.files, ...uploadedFileInfos]
         }
       }));
+      // Merge any structured preference patch
+      const patch = (response as any).initialInputPatch as any;
+      if (patch && typeof patch === 'object') {
+        setPresentation(prev => ({ ...prev, initialInput: { ...prev.initialInput, ...patch } }));
+      }
       
       if (response.finished) {
         setProgress(100);
         onClarificationComplete(aiResponseContent);
       }
       // Estimate completion tokens
-      if (aiResponseContent) {
+      const usage = (response as any).usage;
+      if (usage && usage.completionTokens) {
+        addUsage({ model: usage.model || 'gemini-2.5-flash', kind: 'completion', tokens: usage.completionTokens, at: Date.now() } as any);
+      } else if (aiResponseContent) {
         addUsage({ model: 'gemini-2.5-flash', kind: 'completion', tokens: estimateTokens(aiResponseContent), at: Date.now() } as any);
       }
     } catch (error) {
@@ -149,15 +175,17 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
     }
   };
 
-  const isChatReady = presentation.id && chatHistory.length > 0;
+  const isChatReady = Boolean(presentation.id) && chatHistory.length > 0;
 
   return (
-    <Card className="w-full max-w-3xl h-[85vh] flex flex-col shadow-2xl">
-      <CardHeader>
-        <CardTitle className="font-headline text-3xl">Let's Refine Your Idea</CardTitle>
-        <CardDescription>
-          I'm your presentation strategist. Answer my questions to help me understand your goals. You can also add more files.
-        </CardDescription>
+    <Card className={cn("flex flex-col shadow-2xl md-surface md-elevation-2", compact ? "w-80 h-[calc(100vh-140px)] sticky top-24" : "w-full max-w-3xl h-[85vh]") }>
+      <CardHeader className={compact ? "py-3" : undefined}>
+        <CardTitle className={cn("font-headline", compact ? "text-lg" : "text-3xl")}>Refine Goals</CardTitle>
+        {!compact && (
+          <CardDescription>
+            I'm your presentation strategist. Answer my questions to help me understand your goals. You can also add more files.
+          </CardDescription>
+        )}
       </CardHeader>
       <CardContent className="flex-grow overflow-hidden flex flex-col gap-4">
         <ScrollArea className="h-full pr-4" ref={scrollAreaRef}>
@@ -188,20 +216,24 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
           </div>
         </ScrollArea>
         <div className="flex-shrink-0 pt-2 space-y-4">
-            <FileDropzone 
-              onFilesChange={setNewRawFiles}
-              acceptedFormats=".pdf, .docx, .md, .txt, .png, .jpg, .jpeg, .csv, .xls, .xlsx"
-            />
+            {!compact && (
+              <FileDropzone 
+                onFilesChange={setNewRawFiles}
+                acceptedFormats=".pdf, .docx, .md, .txt, .png, .jpg, .jpeg, .webp, .gif, .svg, .csv"
+              />
+            )}
             <div className="space-y-2">
                 <div className="flex justify-between text-sm font-medium text-muted-foreground">
                     <span>Context Meter</span>
-                    <span>{progress}% complete</span>
+                    <span>{progress}%</span>
                 </div>
                 <Progress value={progress} className="w-full" />
+                {!compact && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
                     <Lightbulb className="h-4 w-4 text-yellow-400" />
                     <span><b>Suggestion:</b> {suggestion}</span>
                 </div>
+                )}
             </div>
         </div>
       </CardContent>
@@ -210,8 +242,8 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message or add files above..."
-            disabled={isLoading || !isChatReady}
+            placeholder={compact ? "Ask or add context..." : "Type your message or add files above..."}
+            disabled={isLoading}
             autoComplete="off"
           />
           <Button type="submit" disabled={isLoading || (!input.trim() && newRawFiles.length === 0)}>

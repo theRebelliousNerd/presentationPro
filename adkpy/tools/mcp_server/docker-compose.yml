@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: presentationpro-mcp-server
+    ports:
+      - "8090:8090"
+    environment:
+      - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - BING_SEARCH_API_KEY=${BING_SEARCH_API_KEY}
+      - ARANGO_HOST=arangodb
+      - ARANGO_PORT=8529
+      - ARANGO_DATABASE=presentationpro
+      - MCP_TELEMETRY_SINK=/tmp/telemetry/mcp_telemetry.jsonl
+      - WEB_SEARCH_CACHE=/tmp/cache/web_search.json
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./logs:/var/log/mcp
+      - ./cache:/tmp/cache
+      - ./telemetry:/tmp/telemetry
+    networks:
+      - presentationpro-network
+    depends_on:
+      - arangodb
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  arangodb:
+    image: arangodb:latest
+    container_name: presentationpro-arangodb-mcp
+    ports:
+      - "8530:8529"  # Different port to avoid conflict
+    environment:
+      - ARANGO_NO_AUTH=1  # For development only
+    volumes:
+      - arangodb-data:/var/lib/arangodb3
+    networks:
+      - presentationpro-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8529/_api/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+networks:
+  presentationpro-network:
+    driver: bridge
+
+volumes:
+  arangodb-data:
+    driver: local

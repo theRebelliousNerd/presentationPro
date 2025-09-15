@@ -2,6 +2,7 @@
 
 import { Slide } from './types';
 import JSZip from 'jszip';
+import type PptxGenJS from 'pptxgenjs';
 
 export function downloadScript(slides: Slide[]) {
   const scriptContent = slides
@@ -97,6 +98,47 @@ export async function downloadEverything(slides: Slide[]) {
   }
   const blob = await zip.generateAsync({ type: 'blob' });
   triggerDownload(blob, 'presentation_all.zip');
+}
+
+export async function downloadPptx(slides: Slide[]) {
+  const mod = await import('pptxgenjs').catch(() => null);
+  if (!mod) {
+    console.error('pptxgenjs not installed');
+    if (typeof window !== 'undefined') alert('PowerPoint export requires pptxgenjs. Run: npm i pptxgenjs and restart the dev server.');
+    return;
+    }
+  const PptxGen = (mod as any).default as unknown as typeof PptxGenJS;
+  const pptx = new (PptxGen as any)();
+  pptx.defineLayout({ name: 'LAYOUT_16x9', width: 13.33, height: 7.5 });
+  pptx.layout = 'LAYOUT_16x9';
+  for (const s of slides) {
+    const slide = pptx.addSlide();
+    // Background image if present
+    if (s.imageUrl) {
+      try {
+        const dataUrl = await toDataUrl(s.imageUrl);
+        slide.addImage({ data: dataUrl, x: 0, y: 0, w: 13.33, h: 7.5 });
+      } catch {}
+    }
+    // Title
+    slide.addText(s.title || 'Slide', { x: 0.5, y: 0.4, w: 12.3, h: 1, fontSize: 28, bold: true, color: '003049' });
+    // Bullets
+    const bullets = (s.content || []).map(t => ({ text: t, options: { bullet: { type: 'number' }, fontSize: 18 } }));
+    if (bullets.length) {
+      slide.addText(bullets as any, { x: 0.8, y: 1.4, w: 11.5, h: 5.5 });
+    }
+  }
+  await pptx.writeFile({ fileName: 'presentation.pptx' });
+}
+
+async function toDataUrl(url: string): Promise<string> {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  return await new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.readAsDataURL(blob);
+  });
 }
 
 function guessExt(url: string) {

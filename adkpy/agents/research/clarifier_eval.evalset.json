@@ -1,0 +1,32 @@
+{
+  "eval_set_id": "research_eval",
+  "name": "Research Agent Evaluation",
+  "description": "Tests the research agent's ability to generate design best-practice rules.",
+  "eval_cases": [
+    {
+      "eval_id": "fetch_design_rules",
+      "conversation": [
+        {
+          "invocation_id": "eval-research-1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "{\"query\": \"best practices for presentation background legibility\"}"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"rules\": [\"Ensure high contrast between text and background\", \"Avoid busy or distracting patterns\", \"Use subtle gradients or textures\", \"Maintain a consistent visual theme\", \"Test readability in different lighting conditions\", \"Keep background elements minimal\", \"Prioritize content over decoration\", \"Use a simple, professional color palette\"]}"
+              }
+            ],
+            "role": null
+          }
+        }
+      ],
+      "session_input": { "app_name": "research", "user_id": "user" }
+    }
+  ]
+}

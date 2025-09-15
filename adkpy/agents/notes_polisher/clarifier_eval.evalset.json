@@ -1,0 +1,32 @@
+{
+  "eval_set_id": "notes_polisher_eval",
+  "name": "Notes Polisher Agent Evaluation",
+  "description": "Tests the notes polisher's ability to adapt speaker notes to different tones.",
+  "eval_cases": [
+    {
+      "eval_id": "polish_to_professional",
+      "conversation": [
+        {
+          "invocation_id": "eval-notes-1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "{\"speakerNotes\": \"So yeah, the numbers went up a lot. It was pretty cool.\", \"tone\": \"professional\"}"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "{\"rephrasedSpeakerNotes\": \"During the last quarter, we observed a significant increase in key performance metrics. This growth can be attributed to several strategic initiatives that we will now discuss in detail.\"}"
+              }
+            ],
+            "role": null
+          }
+        }
+      ],
+      "session_input": { "app_name": "notes_polisher", "user_id": "user" }
+    }
+  ]
+}
