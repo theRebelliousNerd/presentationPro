@@ -129,6 +129,13 @@ class SlideContent:
     agent_source: str = "slide_writer"  # Which agent created/modified
     created_at: str = None
     updated_at: str = None
+    image_url: Optional[str] = None
+    use_generated_image: Optional[bool] = None
+    asset_image_url: Optional[str] = None
+    design_code: Optional[Dict[str, Any]] = None
+    design_spec: Optional[Dict[str, Any]] = None
+    constraints_override: Optional[Dict[str, Any]] = None
+    use_constraints: Optional[bool] = None
     
     def __post_init__(self):
         if self.created_at is None:
@@ -339,7 +346,29 @@ class EnhancedArangoClient:
         result = self._collections['clarifications'].insert(doc, return_new=True)
         logger.info(f"Added clarification {next_sequence} for {presentation_id} by {self.agent_name}")
         return result['new']
-    
+
+    async def replace_clarifications(self, presentation_id: str, clarifications: List[Dict[str, Any]]) -> Dict:
+        """Replace entire clarification history for a presentation."""
+        self._ensure_simple_collection('clarifications')
+        self._db.aql.execute('FOR c IN clarifications FILTER c.presentation_id == @pid REMOVE c', bind_vars={'pid': presentation_id})
+        inserted = []
+        for sequence, item in enumerate(clarifications or [], start=1):
+            role = (item.get('role') or 'assistant').lower()
+            if role not in ('user', 'assistant'):
+                role = 'assistant'
+            entry = ClarificationEntry(
+                presentation_id=presentation_id,
+                sequence=sequence,
+                role=role,
+                content=item.get('content', ''),
+                timestamp=datetime.now(timezone.utc).isoformat(),
+            )
+            doc = asdict(entry)
+            result = self._collections['clarifications'].insert(doc, return_new=True)
+            inserted.append(result.get('new', doc))
+        return {'count': len(inserted)}
+
+
     async def get_clarification_history(self, presentation_id: str) -> List[Dict]:
         """Get all clarifications for a presentation"""
         cursor = self._db.aql.execute(
@@ -405,7 +434,27 @@ class EnhancedArangoClient:
             RETURN latest
         ''', bind_vars={'pid': presentation_id})
         return list(cursor)
-    
+
+    async def replace_slides(self, presentation_id: str, slides: List[SlideContent]) -> Dict:
+        """Replace all slides for a presentation with the provided set."""
+        self._ensure_simple_collection('slides')
+        self._db.aql.execute('FOR s IN slides FILTER s.presentation_id == @pid REMOVE s', bind_vars={'pid': presentation_id})
+        inserted = []
+        for raw in slides or []:
+            slide = raw
+            slide.presentation_id = presentation_id
+            slide.version = 1
+            slide.agent_source = self.agent_name
+            slide.created_at = datetime.now(timezone.utc).isoformat()
+            slide.updated_at = slide.created_at
+            doc = asdict(slide)
+            doc = {k: v for k, v in doc.items() if v is not None}
+            doc['_key'] = f"{presentation_id}_{slide.slide_index}_{slide.version}"
+            result = self._collections['slides'].insert(doc, return_new=True)
+            inserted.append(result.get('new', doc))
+        return {'count': len(inserted)}
+
+
     # Design operations
     async def save_design_spec(self, presentation_id: str, design_data: Dict) -> Dict:
         """Save design specifications"""

@@ -6,25 +6,10 @@
  */
 
 import type { Presentation, AppState } from './types';
-
-// Configuration from environment
-// Prefer runtime detection on the client to avoid hardcoding a stale host:port
-const BUILD_BASE_URL = process.env.NEXT_PUBLIC_ADK_BASE_URL;
+import { resolveAdkBaseUrl } from '@/lib/base-url';
 
 function runtimeBaseUrl(): string {
-  // Client-side: derive from env or window location
-  if (typeof window !== 'undefined') {
-    if (BUILD_BASE_URL && /^https?:\/\//.test(BUILD_BASE_URL)) return BUILD_BASE_URL;
-    const { protocol, hostname, port } = window.location;
-    // If running the web app on :3000, the API gateway is on :18088 (docker-compose mapping)
-    if (port === '3000') {
-      return `${protocol}//${hostname}:18088`;
-    }
-    // Otherwise, try same-origin
-    return `${protocol}//${hostname}${port ? `:${port}` : ''}`;
-  }
-  // Server-side (Next.js server actions): use internal docker service if available
-  return process.env.ADK_BASE_URL || 'http://api-gateway:8088';
+  return resolveAdkBaseUrl();
 }
 const DISABLE_ARANGO = process.env.NEXT_PUBLIC_DISABLE_ARANGO === 'true';
 
@@ -42,6 +27,8 @@ interface PresentationState {
     status: AppState;
     created_at: string;
     updated_at: string;
+    preferences?: any;
+    clarified_goals?: string;
   };
   clarifications?: Array<{
     presentation_id: string;
@@ -64,11 +51,20 @@ interface PresentationState {
     content: string[];
     speaker_notes: string;
     image_prompt: string;
+    image_url?: string;
+    use_generated_image?: boolean;
+    asset_image_url?: string;
+    design_code?: any;
+    design_spec?: any;
+    constraints_override?: any;
+    use_constraints?: boolean;
     version: number;
     agent_source: string;
     created_at: string;
     updated_at: string;
   }>;
+  design_spec?: { design_data?: any };
+  script?: { script_content?: string };
 }
 
 class ArangoClient {
@@ -153,69 +149,71 @@ class ArangoClient {
    * Save presentation data (converted from frontend Presentation type)
    */
   async savePresentation(presentation: Presentation): Promise<ArangoResponse> {
-    const operations = [];
+    const operations = [] as any[];
 
-    // Update presentation metadata
+    const metadataPatch: Record<string, any> = {
+      presentation_id: presentation.id,
+      user_id: 'default',
+      title: this.extractTitle(presentation),
+      status: this.inferStatus(presentation),
+      preferences: presentation.initialInput,
+    };
+    if (typeof presentation.clarifiedGoals === 'string') {
+      metadataPatch.clarified_goals = presentation.clarifiedGoals;
+    }
+    operations.push({ operation: 'update_metadata', data: metadataPatch });
+
+    const clarifications = (presentation.chatHistory || []).map((msg, index) => ({
+      sequence: index + 1,
+      role: msg.role === 'user' ? 'user' : 'assistant',
+      content: msg.content,
+    }));
     operations.push({
-      operation: 'update_metadata',
+      operation: 'save_clarifications',
+      data: { presentation_id: presentation.id, clarifications },
+    });
+
+    operations.push({
+      operation: 'save_outline',
+      data: { presentation_id: presentation.id, outline: presentation.outline || [] },
+    });
+
+    const slidePayload = (presentation.slides || []).map((slide, index) => ({
+      slide_index: index,
+      title: slide.title,
+      content: slide.content || [],
+      speaker_notes: slide.speakerNotes || '',
+      image_prompt: slide.imagePrompt || '',
+      image_url: slide.imageUrl || undefined,
+      use_generated_image: typeof slide.useGeneratedImage === 'boolean' ? slide.useGeneratedImage : undefined,
+      asset_image_url: slide.assetImageUrl || undefined,
+      design_code: slide.designCode || undefined,
+      design_spec: slide.designSpec || undefined,
+      constraints_override: slide.constraintsOverride || undefined,
+      use_constraints: typeof slide.useConstraints === 'boolean' ? slide.useConstraints : undefined,
+    }));
+    operations.push({
+      operation: 'save_slides',
+      data: { presentation_id: presentation.id, slides: slidePayload },
+    });
+
+
+
+    // Persist clarified goals even when clearing them so Arango stays in sync
+    operations.push({
+      operation: 'save_goals',
       data: {
         presentation_id: presentation.id,
-        user_id: 'default', // TODO: Get from auth when implemented
-        title: this.extractTitle(presentation),
-        status: this.inferStatus(presentation),
+        clarified_goals: presentation.clarifiedGoals || '',
       },
     });
 
-    // Save clarifications (chat history)
-    if (presentation.chatHistory && presentation.chatHistory.length > 0) {
+    if ('fullScript' in presentation) {
       operations.push({
-        operation: 'save_clarifications',
+        operation: 'save_script',
         data: {
           presentation_id: presentation.id,
-          clarifications: presentation.chatHistory.map((msg, index) => ({
-            sequence: index + 1,
-            role: msg.role,
-            content: msg.content,
-          })),
-        },
-      });
-    }
-
-    // Save outline
-    if (presentation.outline && presentation.outline.length > 0) {
-      operations.push({
-        operation: 'save_outline',
-        data: {
-          presentation_id: presentation.id,
-          outline: presentation.outline,
-        },
-      });
-    }
-
-    // Save slides
-    if (presentation.slides && presentation.slides.length > 0) {
-      operations.push({
-        operation: 'save_slides',
-        data: {
-          presentation_id: presentation.id,
-          slides: presentation.slides.map((slide, index) => ({
-            slide_index: index,
-            title: slide.title,
-            content: slide.content,
-            speaker_notes: slide.speakerNotes || '',
-            image_prompt: slide.imagePrompt || '',
-          })),
-        },
-      });
-    }
-
-    // Save clarified goals
-    if (presentation.clarifiedGoals) {
-      operations.push({
-        operation: 'save_goals',
-        data: {
-          presentation_id: presentation.id,
-          clarified_goals: presentation.clarifiedGoals,
+          script: presentation.fullScript || '',
         },
       });
     }
@@ -235,35 +233,69 @@ class ArangoClient {
       id: state.metadata?.presentation_id || fallbackPresentation.id,
     };
 
-    // Convert clarifications to chat history
-    if (state.clarifications) {
-      presentation.chatHistory = state.clarifications
-        .sort((a, b) => a.sequence - b.sequence)
-        .map(clarification => ({
-          role: clarification.role,
-          content: clarification.content,
-        }));
+    const metadata = state.metadata || {};
+    if (metadata.preferences && typeof metadata.preferences === 'object') {
+      presentation.initialInput = { ...presentation.initialInput, ...(metadata.preferences as any) };
     }
 
-    // Convert outline
+    let clarifiedGoals = metadata.clarified_goals || presentation.clarifiedGoals || '';
+    const clarifications = state.clarifications ? [...state.clarifications] : [];
+    if (clarifications.length) {
+      const history = clarifications
+        .sort((a, b) => a.sequence - b.sequence)
+        .reduce<Presentation['chatHistory']>((acc, clarification) => {
+          const content = clarification.content || '';
+          if (typeof content === 'string' && content.startsWith('CLARIFIED_GOALS:')) {
+            clarifiedGoals = content.replace('CLARIFIED_GOALS:', '').trim();
+            return acc;
+          }
+          acc.push({
+            role: clarification.role === 'user' ? 'user' : 'model',
+            content,
+          });
+          return acc;
+        }, []);
+      presentation.chatHistory = history;
+    } else {
+      presentation.chatHistory = presentation.chatHistory || [];
+    }
+
+    if (clarifiedGoals) {
+      presentation.clarifiedGoals = clarifiedGoals;
+    }
+
     if (state.outline?.outline) {
       presentation.outline = [...state.outline.outline];
+    } else {
+      presentation.outline = presentation.outline || [];
     }
 
-    // Convert slides
     if (state.slides) {
       presentation.slides = state.slides
         .sort((a, b) => a.slide_index - b.slide_index)
         .map(slide => ({
           id: `${state.metadata?.presentation_id || fallbackPresentation.id}:${slide.slide_index}`,
           title: slide.title,
-          content: slide.content,
-          speakerNotes: slide.speaker_notes,
-          imagePrompt: slide.image_prompt,
-          // Avoid auto image generation on load; render code/gradient backgrounds
+          content: slide.content || [],
+          speakerNotes: slide.speaker_notes || '',
+          imagePrompt: slide.image_prompt || '',
+          imageUrl: slide.image_url || slide.asset_image_url || undefined,
+          assetImageUrl: slide.asset_image_url || undefined,
+          useGeneratedImage: typeof slide.use_generated_image === 'boolean' ? slide.use_generated_image : false,
+          designCode: slide.design_code || undefined,
+          designSpec: slide.design_spec || undefined,
+          constraintsOverride: slide.constraints_override || undefined,
+          useConstraints: typeof slide.use_constraints === 'boolean' ? slide.use_constraints : undefined,
           imageState: 'done',
-          useGeneratedImage: false,
         } as any));
+    }
+
+    if (state.design_spec?.design_data) {
+      (presentation as any).designSpec = state.design_spec.design_data;
+    }
+
+    if (state.script && 'script_content' in state.script) {
+      presentation.fullScript = state.script.script_content || '';
     }
 
     return presentation;
@@ -289,7 +321,13 @@ class ArangoClient {
 
     // Try first outline item
     if (presentation.outline && presentation.outline.length > 0) {
-      return presentation.outline[0].title;
+      const first = presentation.outline[0] as any;
+      if (typeof first === 'string') {
+        return first;
+      }
+      if (first && typeof first === 'object' && typeof first.title === 'string') {
+        return first.title;
+      }
     }
 
     return 'Untitled Presentation';

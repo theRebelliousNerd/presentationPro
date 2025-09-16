@@ -20,6 +20,9 @@ COMPOSE_DOCKER_CLI_BUILD ?= 1
 # Export environment variables
 export DOCKER_BUILDKIT COMPOSE_DOCKER_CLI_BUILD
 
+BACKEND_SERVICES := api-gateway clarifier outline slide-writer critic notes-polisher design script-writer research orchestrate visioncv
+AGENT_SERVICES := clarifier outline slide-writer critic notes-polisher design script-writer research
+DATA_SERVICES := arangodb
 # Build commands
 build: ## Build all services for development
 	@echo "Building all services for development..."
@@ -37,9 +40,9 @@ build-frontend: ## Build only frontend service
 	@echo "Building frontend service..."
 	docker compose build web
 
-build-backend: ## Build all backend services (orchestrator, agents, mcp-server)
+build-backend: ## Build all backend services (gateway, agents, vision)
 	@echo "Building backend services..."
-	docker compose build orchestrator clarifier outline slide-writer critic notes-polisher design script-writer research mcp-server
+	docker compose build $(BACKEND_SERVICES) $(DATA_SERVICES)
 
 # Run commands
 up: ## Start all services in development mode
@@ -63,11 +66,11 @@ up-prod: ## Start all services in production mode
 
 up-frontend: ## Start only frontend and required dependencies
 	@echo "Starting frontend and dependencies..."
-	docker compose up -d web orchestrator arangodb
+	docker compose up -d web api-gateway arangodb
 
 up-agents: ## Start all agents
 	@echo "Starting all agents..."
-	docker compose up -d clarifier outline slide-writer critic notes-polisher design script-writer research
+	docker compose up -d $(AGENT_SERVICES)
 
 # Stop commands
 down: ## Stop all services
@@ -96,11 +99,14 @@ logs-follow: ## Follow logs for all services
 logs-web: ## Show logs for frontend service
 	docker compose logs -f web
 
-logs-orchestrator: ## Show logs for orchestrator service
-	docker compose logs -f orchestrator
+logs-api-gateway: ## Show logs for API gateway service
+	docker compose logs -f api-gateway
+
+logs-orchestrator: ## [deprecated] Alias for API gateway logs
+	@$(MAKE) logs-api-gateway
 
 logs-agents: ## Show logs for all agents
-	docker compose logs -f clarifier outline slide-writer critic notes-polisher design script-writer research
+	docker compose logs -f $(AGENT_SERVICES)
 
 logs-db: ## Show logs for database services
 	docker compose logs -f arangodb
@@ -111,12 +117,13 @@ health: ## Check health status of all services
 	@docker compose ps --format "table {{.Service}}\t{{.Status}}\t{{.Ports}}"
 	@echo ""
 	@echo "Service Health Checks:"
-	@for service in web orchestrator clarifier outline slide-writer critic notes-polisher design script-writer research mcp-server arangodb; do \
-		echo -n "$$service: "; \
-		if docker compose exec -T $$service curl -f http://localhost:$$(docker compose port $$service 80 2>/dev/null | cut -d: -f2)/health >/dev/null 2>&1; then \
-			echo "✓ Healthy"; \
+	@overview=$$(docker compose ps --format '{{.Service}}::{{.Status}}'); \
+	@for service in web api-gateway $(AGENT_SERVICES) visioncv $(DATA_SERVICES); do \
+		status=$$(echo "$$overview" | grep -E "^$$service::" | head -n1 | cut -d'::' -f2); \
+		if [ -n "$$status" ]; then \
+			echo "$$service: $$status"; \
 		else \
-			echo "✗ Unhealthy"; \
+			echo "$$service: not running"; \
 		fi; \
 	done
 
@@ -132,9 +139,12 @@ scale-agents: ## Scale agent services (usage: make scale-agents REPLICAS=3)
 	@echo "Scaling agent services to $(REPLICAS) replicas..."
 	docker compose up -d --scale clarifier=$(REPLICAS) --scale outline=$(REPLICAS) --scale slide-writer=$(REPLICAS) --scale critic=$(REPLICAS) --scale notes-polisher=$(REPLICAS) --scale design=$(REPLICAS) --scale script-writer=$(REPLICAS) --scale research=$(REPLICAS)
 
-scale-orchestrator: ## Scale orchestrator service (usage: make scale-orchestrator REPLICAS=2)
-	@echo "Scaling orchestrator to $(REPLICAS) replicas..."
-	docker compose up -d --scale orchestrator=$(REPLICAS)
+scale-api-gateway: ## Scale API gateway service (usage: make scale-api-gateway REPLICAS=2)
+	@echo "Scaling api-gateway to $(REPLICAS) replicas..."
+	docker compose up -d --scale api-gateway=$(REPLICAS)
+
+scale-orchestrator: ## [deprecated] Alias for API gateway scaling
+	@$(MAKE) scale-api-gateway REPLICAS=$(REPLICAS)
 
 # Restart commands
 restart: ## Restart all services
@@ -147,7 +157,7 @@ restart-frontend: ## Restart frontend service
 
 restart-backend: ## Restart backend services
 	@echo "Restarting backend services..."
-	docker compose restart orchestrator clarifier outline slide-writer critic notes-polisher design script-writer research mcp-server
+	docker compose restart $(BACKEND_SERVICES)
 
 restart-db: ## Restart database service
 	@echo "Restarting database service..."
@@ -157,7 +167,7 @@ restart-db: ## Restart database service
 test: ## Run tests in containers
 	@echo "Running tests..."
 	docker compose exec web npm test
-	docker compose exec orchestrator python -m pytest tests/ -v
+	docker compose exec api-gateway python -m pytest tests/ -v
 
 test-e2e: ## Run end-to-end tests
 	@echo "Running end-to-end tests..."
@@ -183,8 +193,11 @@ db-restore: ## Restore ArangoDB data (usage: make db-restore BACKUP_DIR=./backup
 shell-web: ## Open shell in web container
 	docker compose exec web sh
 
-shell-orchestrator: ## Open shell in orchestrator container
-	docker compose exec orchestrator bash
+shell-api-gateway: ## Open shell in API gateway container
+	docker compose exec api-gateway bash
+
+shell-orchestrator: ## [deprecated] Alias for API gateway shell
+	@$(MAKE) shell-api-gateway
 
 shell-agent: ## Open shell in agent container (usage: make shell-agent AGENT=clarifier)
 	docker compose exec $(AGENT) bash

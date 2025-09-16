@@ -214,13 +214,12 @@ async def batch_operations(request: BatchRequest):
 
                 elif operation.operation == "save_clarifications":
                     data = operation.data
-                    for clarification in data["clarifications"]:
-                        result = await client.add_clarification(
-                            presentation_id=data["presentation_id"],
-                            role=clarification["role"],
-                            content=clarification["content"]
-                        )
-                    results.append({"operation": "save_clarifications", "count": len(data["clarifications"])})
+                    clarifications = data.get("clarifications") or []
+                    await client.replace_clarifications(
+                        presentation_id=data["presentation_id"],
+                        clarifications=clarifications
+                    )
+                    results.append({"operation": "save_clarifications", "count": len(clarifications)})
 
                 elif operation.operation == "save_outline":
                     data = operation.data
@@ -233,17 +232,27 @@ async def batch_operations(request: BatchRequest):
                 elif operation.operation == "save_slides":
                     data = operation.data
                     from agents.base_arango_client import SlideContent
-                    for slide in data["slides"]:
+                    slides_payload = []
+                    for raw in data.get("slides", []):
+                        idx = raw.get("slide_index")
                         slide_content = SlideContent(
                             presentation_id=data["presentation_id"],
-                            slide_index=slide["slide_index"],
-                            title=slide["title"],
-                            content=slide["content"],
-                            speaker_notes=slide["speaker_notes"],
-                            image_prompt=slide["image_prompt"]
+                            slide_index=int(idx) if idx is not None else len(slides_payload),
+                            title=raw.get("title") or '',
+                            content=raw.get("content") or [],
+                            speaker_notes=raw.get("speaker_notes") or '',
+                            image_prompt=raw.get("image_prompt") or '',
+                            image_url=raw.get("image_url"),
+                            use_generated_image=raw.get("use_generated_image"),
+                            asset_image_url=raw.get("asset_image_url"),
+                            design_code=raw.get("design_code"),
+                            design_spec=raw.get("design_spec"),
+                            constraints_override=raw.get("constraints_override"),
+                            use_constraints=raw.get("use_constraints"),
                         )
-                        result = await client.save_slide(slide_content)
-                    results.append({"operation": "save_slides", "count": len(data["slides"])})
+                        slides_payload.append(slide_content)
+                    result = await client.replace_slides(data["presentation_id"], slides_payload)
+                    results.append({"operation": "save_slides", "count": result.get('count', len(slides_payload))})
 
                 elif operation.operation == "save_review":
                     data = operation.data
@@ -255,14 +264,21 @@ async def batch_operations(request: BatchRequest):
                     results.append({"operation": "save_review", "result": result})
 
                 elif operation.operation == "save_goals":
-                    # Store clarified goals as a special clarification entry
                     data = operation.data
-                    result = await client.add_clarification(
+                    goals_text = data.get('clarified_goals', '')
+                    await client.upsert_presentation_metadata(
                         presentation_id=data["presentation_id"],
-                        role="assistant",
-                        content=f"CLARIFIED_GOALS: {data['clarified_goals']}"
+                        patch={'clarified_goals': goals_text}
                     )
-                    results.append({"operation": "save_goals", "result": result})
+                    results.append({"operation": "save_goals", "result": {'ok': True, 'clarified_goals': goals_text}})
+
+                elif operation.operation == "save_script":
+                    data = operation.data
+                    await client.save_script(
+                        presentation_id=data["presentation_id"],
+                        script_content=data.get('script') or data.get('script_content') or ''
+                    )
+                    results.append({"operation": "save_script", "result": {'ok': True}})
 
                 else:
                     logger.warning(f"Unknown operation: {operation.operation}")

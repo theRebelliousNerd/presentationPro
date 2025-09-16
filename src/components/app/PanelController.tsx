@@ -5,6 +5,7 @@ import ClarificationChat from '@/components/app/ClarificationChat'
 import { Presentation } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { orchListReviews } from '@/lib/orchestrator'
+import { resolveAdkBaseUrl } from '@/lib/base-url'
 
 type PanelKind = 'chat' | 'reviews' | null
 
@@ -69,7 +70,7 @@ export default function PanelController({
       if (open !== 'reviews' || !presentation?.id || activeSlideIndex == null) return
       setLoading(true)
       try {
-        const base = (process.env.NEXT_PUBLIC_ADK_BASE_URL || process.env.ADK_BASE_URL || '') as string
+        const base = resolveAdkBaseUrl()
         const res = await fetch(`${base}/v1/arango/presentations/${encodeURIComponent(presentation.id)}/slides/${activeSlideIndex}/reviews?limit=${limit}&offset=${offset}`)
         if (res.ok) {
           const data = await res.json()

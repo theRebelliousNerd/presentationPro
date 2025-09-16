@@ -695,41 +695,94 @@ class ScriptWriterAgent(BaseAgentWrapper):
             self.set_model(data.textModel)
 
         system_prompt = (
-            "You are a ScriptWriter agent that creates presentation scripts.\n\n"
-            "Your task is to write a cohesive script for the entire presentation.\n\n"
-            "Requirements:\n"
-            "- Create smooth transitions between slides\n"
-            "- Maintain consistent tone throughout\n"
-            "- Include timing cues and emphasis points\n"
-            "- Make it conversational and engaging\n\n"
-            "Output Format:\n"
-            "Return a JSON object with:\n"
-            "{\n"
-            '  "script": "Complete presentation script..."\n'
-            "}"
+            "You are a ScriptWriter agent that creates presentation scripts.
+
+"
+            "Your task is to write a cohesive script for the entire presentation that references slide content and relevant supporting assets.
+
+"
+            "Requirements:
+"
+            "- Create smooth transitions between slides
+"
+            "- Maintain consistent tone throughout
+"
+            "- Call out when to reference provided assets (cite the asset name)
+"
+            "- Include timing cues and emphasis points
+"
+            "- Make it conversational and engaging
+
+"
+            "Output Format:
+"
+            "Return a JSON object with:
+"
+            "{
+"
+            '  "script": "Complete presentation script..."
+'
+            "}
+"
         )
 
-        slides_summary = "\n".join([
-            f"Slide {i+1}: {s.get('title', 'Untitled')}"
-            for i, s in enumerate(data.slides)
-        ])
+        slide_blocks = []
+        for idx, slide in enumerate(data.slides or []):
+            title = slide.get('title') or 'Untitled'
+            bullets = slide.get('content') or []
+            notes = slide.get('speakerNotes') or ''
+            section_lines = [f"Slide {idx + 1}: {title}"]
+            filtered_bullets = [b.strip() for b in bullets if isinstance(b, str) and b.strip()]
+            if filtered_bullets:
+                section_lines.append('Key points:')
+                section_lines.extend([f"- {b}" for b in filtered_bullets])
+            if isinstance(notes, str) and notes.strip():
+                section_lines.append('Existing speaker notes:')
+                section_lines.append(notes.strip())
+            slide_blocks.append("
+".join(section_lines))
 
-        prompt_parts = [
-            system_prompt,
-            f"\nPresentation slides:\n{slides_summary}",
-            "\nGenerate a complete presentation script."
-        ]
+        asset_lines = []
+        for asset in data.assets or []:
+            name = asset.get('name') or asset.get('url') or 'Asset'
+            snippet = ''
+            text_field = asset.get('text') or asset.get('summary')
+            if isinstance(text_field, str) and text_field.strip():
+                snippet = text_field.strip().replace('\r', ' ').replace('\n', ' ')[:400]
+            kind = asset.get('kind') or asset.get('intent')
+            descriptor = f" ({kind})" if kind else ''
+            if snippet:
+                asset_lines.append(f"{name}{descriptor}: {snippet}")
+            else:
+                asset_lines.append(f"{name}{descriptor}")
+
+        prompt_parts = [system_prompt]
+        if slide_blocks:
+            prompt_parts.append("
+Presentation slides with details:
+" + "
+
+".join(slide_blocks))
+        if asset_lines:
+            prompt_parts.append("
+Reference assets available for the script:
+" + "
+".join(asset_lines))
+        prompt_parts.append("
+Generate a complete presentation script that references slides in order, transitions smoothly, and mentions assets when relevant.")
 
         text, usage = self.llm(prompt_parts)
 
         try:
             cleaned_text = text.strip().removeprefix("```json").removesuffix("```")
             obj = json.loads(cleaned_text)
-            output_data = {"script": obj.get("script", "Presentation script goes here.")}
+            script_text = obj.get("script") or obj.get("data") or "Presentation script goes here."
+            output_data = {"script": script_text}
         except (json.JSONDecodeError, TypeError):
             output_data = {"script": "Welcome to this presentation. Let's begin..."}
 
         return AgentResult(data=output_data, usage=usage)
+
 
 
 # ============= Research Agent Wrapper =============

@@ -11,7 +11,7 @@ export type AgentModels = {
   research: string
 }
 
-const defaultModels: AgentModels = {
+export const DEFAULT_AGENT_MODELS: AgentModels = {
   clarifier: 'googleai/gemini-2.5-flash',
   outline: 'googleai/gemini-2.5-flash',
   slideWriter: 'googleai/gemini-2.5-flash',
@@ -22,17 +22,18 @@ const defaultModels: AgentModels = {
   research: 'googleai/gemini-2.5-flash',
 }
 
-const LS_KEY = 'agentModels.v1'
+export const AGENT_MODELS_COOKIE = 'agentModels';
+const LS_KEY = 'agentModels.v1';
 
 export function getAgentModels(): AgentModels {
-  if (typeof window === 'undefined') return defaultModels
+  if (typeof window === 'undefined') return DEFAULT_AGENT_MODELS
   try {
     const raw = localStorage.getItem(LS_KEY)
-    if (!raw) return defaultModels
+    if (!raw) return DEFAULT_AGENT_MODELS
     const data = JSON.parse(raw)
-    return { ...defaultModels, ...(data || {}) }
+    return { ...DEFAULT_AGENT_MODELS, ...(data || {}) }
   } catch {
-    return defaultModels
+    return DEFAULT_AGENT_MODELS
   }
 }
 
@@ -41,6 +42,12 @@ export function setAgentModels(next: Partial<AgentModels>) {
   try {
     const merged = { ...getAgentModels(), ...next }
     localStorage.setItem(LS_KEY, JSON.stringify(merged))
+    void fetch('/api/settings/agent-models', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ models: merged }),
+      credentials: 'include',
+    }).catch(() => {})
   } catch {}
 }
 

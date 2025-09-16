@@ -1,0 +1,170 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - link "Home" [ref=e4] [cursor=pointer]:
+        - /url: /
+        - img [ref=e5] [cursor=pointer]
+        - generic [ref=e8] [cursor=pointer]: Home
+      - link "Presentations" [ref=e9] [cursor=pointer]:
+        - /url: /presentations
+        - img [ref=e10] [cursor=pointer]
+        - generic [ref=e13] [cursor=pointer]: Presentations
+      - link "Research" [ref=e14] [cursor=pointer]:
+        - /url: /dev/search-cache
+        - img [ref=e15] [cursor=pointer]
+        - generic [ref=e17] [cursor=pointer]: Research
+      - link "Dev UI" [ref=e18] [cursor=pointer]:
+        - /url: /dev
+        - img [ref=e19] [cursor=pointer]
+        - generic [ref=e21] [cursor=pointer]: Dev UI
+      - button "Slides" [ref=e22] [cursor=pointer]:
+        - img [ref=e23] [cursor=pointer]
+        - generic [ref=e26] [cursor=pointer]: Slides
+      - button "Show Chat" [ref=e27] [cursor=pointer]:
+        - img [ref=e29] [cursor=pointer]
+        - generic [ref=e31] [cursor=pointer]: Chat
+      - button "Reviews" [ref=e32] [cursor=pointer]:
+        - img [ref=e34] [cursor=pointer]
+        - generic [ref=e36] [cursor=pointer]: Reviews
+      - button "Settings" [ref=e37] [cursor=pointer]:
+        - img [ref=e38] [cursor=pointer]
+        - generic [ref=e41] [cursor=pointer]: Settings
+    - generic [ref=e43]:
+      - banner [ref=e44]:
+        - generic [ref=e45]:
+          - generic [ref=e46]:
+            - img "Next-Gen Engineering and Research Development" [ref=e47]
+            - heading "Presentation Studio" [level=1] [ref=e49]
+          - generic [ref=e50]:
+            - generic [ref=e51]:
+              - generic [ref=e52]:
+                - text: "In:"
+                - generic [ref=e53]: "0"
+              - generic [ref=e54]:
+                - text: "Out:"
+                - generic [ref=e55]: "0"
+              - generic [ref=e56]:
+                - text: "Img:"
+                - generic [ref=e57]: "0"
+              - generic [ref=e58]:
+                - text: "Cost:"
+                - generic [ref=e59]: Set pricing
+              - button "Reset" [ref=e60] [cursor=pointer]
+            - button "Details" [ref=e61] [cursor=pointer]
+            - button "Settings" [ref=e62] [cursor=pointer]:
+              - img
+              - text: Settings
+            - button "Save" [ref=e63] [cursor=pointer]
+            - button "Start Over" [ref=e64] [cursor=pointer]
+      - main [ref=e65]:
+        - generic [ref=e67]:
+          - generic [ref=e68]:
+            - generic [ref=e69]:
+              - generic [ref=e70]: Slides
+              - text: ": 0"
+            - generic [ref=e71]: /
+            - generic [ref=e72]:
+              - generic [ref=e73]: Assets
+              - text: ": 0"
+            - generic [ref=e74]: /
+            - generic [ref=e75]:
+              - generic [ref=e76]: Tokens
+              - text: ": 0/0"
+            - generic [ref=e77]: /
+            - generic [ref=e78]:
+              - generic [ref=e79]: Cost
+              - text: ": $0.0000"
+          - generic [ref=e80]:
+            - link "Projects" [ref=e81] [cursor=pointer]:
+              - /url: /presentations
+            - button "Downloads" [ref=e82] [cursor=pointer]:
+              - img
+              - text: Downloads
+        - generic [ref=e86]:
+          - generic [ref=e87]:
+            - heading "Create a New Presentation" [level=3] [ref=e88]
+            - paragraph [ref=e89]: Start by pasting your script, notes, or any unstructured text. You can also upload supporting documents and images.
+          - generic [ref=e90]:
+            - generic [ref=e91]:
+              - generic [ref=e92]: Presentation Parameters
+              - generic [ref=e93]:
+                - generic [ref=e94]:
+                  - generic [ref=e95]: Length
+                  - combobox "Length" [ref=e96] [cursor=pointer]:
+                    - generic: Medium (10-15 slides)
+                    - img [ref=e97] [cursor=pointer]
+                - generic [ref=e99]:
+                  - generic [ref=e100]: Audience
+                  - combobox "Audience" [ref=e101] [cursor=pointer]:
+                    - generic: General
+                    - img [ref=e102] [cursor=pointer]
+                - generic [ref=e104]:
+                  - generic [ref=e105]: Industry
+                  - combobox "Industry" [ref=e106] [cursor=pointer]:
+                    - generic: Select industry
+                    - img [ref=e107] [cursor=pointer]
+                - generic [ref=e109]:
+                  - generic [ref=e110]: Graphic Style
+                  - combobox "Graphic Style" [ref=e111] [cursor=pointer]:
+                    - generic: Modern & Clean
+                    - img [ref=e112] [cursor=pointer]
+                - generic [ref=e114]:
+                  - generic [ref=e115]:
+                    - text: "Formality:"
+                    - generic [ref=e116]: Neutral
+                  - slider [ref=e121]
+                - generic [ref=e122]:
+                  - generic [ref=e123]:
+                    - text: "Energy:"
+                    - generic [ref=e124]: Neutral
+                  - slider [ref=e129]
+            - heading "Advanced Clarity" [level=3] [ref=e132]:
+              - button "Advanced Clarity" [ref=e133] [cursor=pointer]:
+                - text: Advanced Clarity
+                - img [ref=e134] [cursor=pointer]
+            - heading "Presentation Preferences" [level=3] [ref=e138]:
+              - button "Presentation Preferences" [ref=e139] [cursor=pointer]:
+                - text: Presentation Preferences
+                - img [ref=e140] [cursor=pointer]
+            - generic [ref=e142]:
+              - generic [ref=e143]: Template Preset (Optional)
+              - paragraph [ref=e144]: Choose a preset that guides outline, slide density, and visual style.
+              - combobox [ref=e145] [cursor=pointer]:
+                - generic: Select a template
+                - img [ref=e146] [cursor=pointer]
+            - generic [ref=e148]:
+              - generic [ref=e149]: Presentation Content
+              - paragraph [ref=e150]: The core material for your presentation. Paste text below and/or upload supporting documents, data, charts, etc.
+              - textbox "Paste your presentation content here..." [ref=e151]
+              - generic [ref=e153] [cursor=pointer]:
+                - button "Choose File" [ref=e154]
+                - button "Select Folder" [ref=e155]
+                - generic [ref=e156] [cursor=pointer]:
+                  - img [ref=e157] [cursor=pointer]
+                  - paragraph [ref=e160] [cursor=pointer]: Drag & drop files here, or click to select
+                  - paragraph [ref=e161] [cursor=pointer]: .pdf, .docx, .md, .txt, .png, .jpg, .jpeg, .csv, .xls, .xlsx
+                  - generic [ref=e163] [cursor=pointer]:
+                    - button "Select Files" [ref=e164] [cursor=pointer]
+                    - button "Select Folder" [ref=e166] [cursor=pointer]
+            - generic [ref=e167]:
+              - generic [ref=e168]: Style Guide (Optional)
+              - paragraph [ref=e169]: Upload files to guide the visual style (e.g., brand guidelines, logos, color palettes, background images).
+              - generic [ref=e171] [cursor=pointer]:
+                - button "Choose File" [ref=e172]
+                - button "Select Folder" [ref=e173]
+                - generic [ref=e174] [cursor=pointer]:
+                  - img [ref=e175] [cursor=pointer]
+                  - paragraph [ref=e178] [cursor=pointer]: Drag & drop files here, or click to select
+                  - paragraph [ref=e179] [cursor=pointer]: .pdf, .png, .jpg, .jpeg
+                  - generic [ref=e181] [cursor=pointer]:
+                    - button "Select Files" [ref=e182] [cursor=pointer]
+                    - button "Select Folder" [ref=e184] [cursor=pointer]
+          - generic [ref=e185]:
+            - button "Start Creating" [disabled]
+  - region "Notifications (F8)":
+    - list
+  - alert [ref=e186]
+```

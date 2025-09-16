@@ -21,14 +21,21 @@ export default function FileDropzone({ onFilesChange, acceptedFormats }: FileDro
   const fileInputId = (typeof fileInputIdRef.current === 'function' ? (fileInputIdRef.current as any)() : fileInputIdRef.current) as string;
   const dirInputId = (typeof dirInputIdRef.current === 'function' ? (dirInputIdRef.current as any)() : dirInputIdRef.current) as string;
 
-  const handleFileChange = useCallback(
-    (newFiles: FileList) => {
-      const allFiles = [...files, ...Array.from(newFiles)];
-      setFiles(allFiles);
-      onFilesChange(allFiles);
-    },
-    [files, onFilesChange]
-  );
+  const handleFileChange = useCallback((incoming: FileList | File[]) => {
+    const list = Array.isArray(incoming) ? incoming : Array.from(incoming);
+    setFiles(prev => {
+      const merged = new Map<string, File>();
+      for (const file of prev) {
+        merged.set(`${file.name}-${file.size}-${file.lastModified}`, file);
+      }
+      for (const file of list) {
+        merged.set(`${file.name}-${file.size}-${file.lastModified}`, file);
+      }
+      const next = Array.from(merged.values());
+      onFilesChange(next);
+      return next;
+    });
+  }, [onFilesChange]);
   
   const handleDragEnter = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();

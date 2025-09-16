@@ -3,6 +3,7 @@
 import { Slide } from './types';
 import JSZip from 'jszip';
 import type PptxGenJS from 'pptxgenjs';
+import { resolveAdkBaseUrl } from '@/lib/base-url';
 
 export function downloadScript(slides: Slide[]) {
   const scriptContent = slides
@@ -51,7 +52,7 @@ ${slides.map(s => {
 }
 
 export async function exportServerHtml(presentation: { slides: Slide[]; id?: string; }): Promise<void> {
-  const base = (process.env.NEXT_PUBLIC_ADK_BASE_URL || process.env.ADK_BASE_URL || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}${window.location.port==='3000'?':18088':(window.location.port?':'+window.location.port:'')}` : '')) as string
+  const base = resolveAdkBaseUrl()
   try {
     const res = await fetch(`${base}/v1/export/html`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title: presentation.id || 'Presentation', slides: presentation.slides || [] }) })
     if (!res.ok) throw new Error('Export failed')
@@ -65,7 +66,7 @@ export async function exportServerHtml(presentation: { slides: Slide[]; id?: str
 }
 
 export async function exportServerPdf(presentation: { slides: Slide[]; id?: string; }): Promise<void> {
-  const base = (process.env.NEXT_PUBLIC_ADK_BASE_URL || process.env.ADK_BASE_URL || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}${window.location.port==='3000'?':18088':(window.location.port?':'+window.location.port:'')}` : '')) as string
+  const base = resolveAdkBaseUrl()
   try {
     const res = await fetch(`${base}/v1/export/pdf`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title: presentation.id || 'Presentation', slides: presentation.slides || [] }) })
     if (!res.ok) throw new Error('Export failed')

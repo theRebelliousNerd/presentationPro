@@ -1,21 +1,10 @@
 // ADK/A2A orchestrator client for presentation generation.
 
 type Fetcher = typeof fetch;
-import { getAgentModels } from '@/lib/agent-models'
+import { resolveAdkBaseUrl } from '@/lib/base-url';
 
 function baseUrl() {
-  // Prefer browser-exposed env; fallback to server env for server-side only; then internal; then host mapping
-  if (typeof window !== 'undefined') {
-    return (
-      process.env.NEXT_PUBLIC_ADK_BASE_URL ||
-      `${window.location.protocol}//${window.location.hostname}${window.location.port === '3000' ? ':18088' : (window.location.port ? ':'+window.location.port : '')}`
-    );
-  }
-  return (
-    process.env.ADK_BASE_URL ||
-    process.env.NEXT_PUBLIC_ADK_BASE_URL ||
-    'http://api-gateway:8088'
-  );
+  return resolveAdkBaseUrl();
 }
 
 async function withRetry<T>(fn: () => Promise<T>, attempts = 2, delayMs = 400): Promise<T> {
@@ -62,16 +51,7 @@ export async function orchDesignValidate(input: { html?: string; css?: string; s
 export async function orchDesignSanitize(input: { html?: string; css?: string; svg?: string }): Promise<{ html?: string; css?: string; svg?: string; warnings?: string[] }> { return postJSON('/v1/design/sanitize', input); }
 
 // Helpers to attach models based on agent
-export function withAgentModel(agent: keyof ReturnType<typeof getAgentModels>, payload: any) {
-  const models = getAgentModels()
-  const model = (models as any)[agent]
-  return { ...payload, textModel: model }
-}
 
-export function withSlideModels(payload: any) {
-  const models = getAgentModels()
-  return { ...payload, writerModel: models.slideWriter, criticModel: models.critic }
-}
 // Reviews listing from Arango
 export async function orchListReviews(presentationId: string, slideIndex: number, limit = 10): Promise<{ data?: { created_at?: string; agent_source?: string; review_data?: any }[]; success?: boolean; error?: string }> {
   const call = () => fetch(`${baseUrl()}/v1/arango/presentations/${encodeURIComponent(presentationId)}/slides/${slideIndex}/reviews?limit=${limit}`);

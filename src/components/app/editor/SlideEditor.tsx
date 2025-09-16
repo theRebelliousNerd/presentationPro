@@ -15,6 +15,7 @@ import { generateSlideContent } from '@/lib/actions';
 import RichBullets from './RichBullets';
 import { Badge } from '@/components/ui/badge';
 import DesignPanel from './design/DesignPanel';
+import { resolveAdkBaseUrl } from '@/lib/base-url';
 
 type SlideEditorProps = {
   slide: Slide;
@@ -85,7 +86,7 @@ export default function SlideEditor({ slide, updateSlide, assets = [], constrain
     (async () => {
       try {
         if (!presentationId || typeof slideIndex !== 'number') return;
-        const base = (process.env.NEXT_PUBLIC_ADK_BASE_URL || process.env.ADK_BASE_URL || '') as string;
+        const base = resolveAdkBaseUrl();
         const res = await fetch(`${base}/v1/arango/presentations/${encodeURIComponent(presentationId)}/slides/${slideIndex}/reviews?limit=5`);
         if (res.ok) {
           const data = await res.json();
@@ -199,7 +200,7 @@ export default function SlideEditor({ slide, updateSlide, assets = [], constrain
                 <input className="w-full p-2 border rounded" placeholder="Search icons (e.g., check, info, chart)" value={iconQuery} onChange={(e)=>setIconQuery(e.target.value)} />
                 <Button size="sm" onClick={async ()=>{
                   const pack = (typeof window !== 'undefined' && (localStorage.getItem('app.iconPack') as any)) || 'lucide'
-                  const base = (process.env.NEXT_PUBLIC_ADK_BASE_URL || process.env.ADK_BASE_URL || '') as string
+                  const base = resolveAdkBaseUrl();
                   const res = await fetch(`${base}/v1/assets/icons/list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pack, q: iconQuery, limit: 12 }) })
                   if (res.ok) {
                     const arr = await res.json(); setIconResults(arr || [])
@@ -209,7 +210,7 @@ export default function SlideEditor({ slide, updateSlide, assets = [], constrain
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {iconResults.map((it, idx)=>(
                   <Button key={idx} variant="outline" className="justify-start" onClick={async ()=>{
-                    const base = (process.env.NEXT_PUBLIC_ADK_BASE_URL || process.env.ADK_BASE_URL || '') as string
+                    const base = resolveAdkBaseUrl();
                     const res = await fetch(`${base}/v1/assets/icons/get`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pack: it.pack, name: it.name }) })
                     if (res.ok) {
                       const { svg } = await res.json()
@@ -260,7 +261,7 @@ export default function SlideEditor({ slide, updateSlide, assets = [], constrain
                   <option value="overlap">Overlapping Circles</option>
                 </select>
                 <Button size="sm" onClick={async ()=>{
-                  const base = (process.env.NEXT_PUBLIC_ADK_BASE_URL || process.env.ADK_BASE_URL || '') as string
+                  const base = resolveAdkBaseUrl();
                   const res = await fetch(`${base}/v1/assets/patterns/get`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: patternName }) })
                   if (res.ok) {
                     const { svg } = await res.json();

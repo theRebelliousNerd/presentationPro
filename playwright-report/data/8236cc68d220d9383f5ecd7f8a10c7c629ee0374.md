@@ -1,0 +1,45 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - heading "VisionCV Dev Panel" [level=1] [ref=e3]
+    - generic [ref=e4]:
+      - generic [ref=e5]: "Tool:"
+      - combobox [active] [ref=e6]:
+        - option "critic.color_contrast" [selected]
+        - option "critic.assess_blur"
+        - option "critic.measure_noise"
+        - option "critic.check_color_contrast_ratio"
+        - option "design.saliency_spectral"
+        - option "design.find_empty_regions"
+        - option "design.extract_palette"
+        - option "design.suggest_placement"
+        - option "design.generate_procedural_texture"
+        - option "research.ocr_extract"
+        - option "brand.detect_logo"
+        - option "brand.validate_brand_colors"
+        - option "research.extract_data_from_bar_chart"
+        - option "research.extract_data_from_line_graph"
+      - button "Call" [ref=e7] [cursor=pointer]
+    - generic [ref=e8]: "Base: http://localhost:18088"
+    - generic [ref=e9]:
+      - generic [ref=e10]:
+        - generic "Drop images here or click to select" [ref=e11] [cursor=pointer]:
+          - generic [ref=e12] [cursor=pointer]: Drag & drop images here
+          - generic [ref=e13] [cursor=pointer]: Primary screenshot required.
+          - generic [ref=e15] [cursor=pointer]:
+            - generic [ref=e16] [cursor=pointer]: Primary
+            - generic [ref=e17] [cursor=pointer]: No image
+        - button "Reset" [ref=e19] [cursor=pointer]
+        - generic [ref=e20]:
+          - generic [ref=e21]: Request JSON
+          - textbox [ref=e22]: "{ \"screenshotDataUrl\": \"data:image/png;base64,...\" }"
+      - generic [ref=e23]:
+        - generic [ref=e24]: Response
+        - textbox [ref=e25]: "{}"
+    - paragraph [ref=e26]: "Note: These routes call the API gateway proxies and require VisionCV to be running in Docker compose."
+  - region "Notifications (F8)":
+    - list
+  - alert [ref=e27]
+```

@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
+import { resolveAdkBaseUrl } from '@/lib/base-url'
 
 type LogItem = {
   created_at?: string
@@ -21,7 +22,7 @@ export default function ProjectLogs({ presentationId }: { presentationId: string
     if (!presentationId) return
     setLoading(true)
     try {
-      const base = (process.env.NEXT_PUBLIC_ADK_BASE_URL || process.env.ADK_BASE_URL || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}${window.location.port==='3000'?':18088':(window.location.port?':'+window.location.port:'')}` : '')) as string
+      const base = resolveAdkBaseUrl()
       const url = `${base}/v1/arango/presentations/${encodeURIComponent(presentationId)}/messages?limit=100${agent ? `&agent=${encodeURIComponent(agent)}` : ''}`
       const res = await fetch(url)
       if (res.ok) {

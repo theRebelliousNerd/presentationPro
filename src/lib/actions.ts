@@ -1,9 +1,12 @@
 'use server';
 
-import { orchClarify, orchOutline, orchWriteSlide, orchPolishNotes, orchDesignPrompt, orchDesignGenerate, orchDesignValidate, orchDesignSanitize, orchScript, orchIngest, orchRetrieve, orchCritiqueSlide, withAgentModel, withSlideModels } from '@/lib/orchestrator';
+import { orchClarify, orchOutline, orchWriteSlide, orchPolishNotes, orchDesignPrompt, orchDesignGenerate, orchDesignValidate, orchDesignSanitize, orchScript, orchIngest, orchRetrieve, orchCritiqueSlide } from '@/lib/orchestrator';
 
 import type { ChatMessage, Presentation, UploadedFileRef } from './types';
+import type { AgentModels } from '@/lib/agent-models';
 import { extractAssetsContext } from '@/lib/ingest';
+import { resolveAdkBaseUrl } from '@/lib/base-url';
+import { getServerAgentModels } from '@/lib/server-agent-models';
 
 export interface RefinePresentationGoalsOutput {
   clarifiedGoals: string;
@@ -34,13 +37,33 @@ export type GenerateSlideContentOutput = {
   imagePrompt: string;
 }[]
 
+function currentAgentModels(): AgentModels {
+  return getServerAgentModels();
+}
+
+function attachAgentModel<K extends keyof AgentModels>(agent: K, payload: any) {
+  const models = currentAgentModels();
+  const model = models[agent] || models.clarifier;
+  if (payload && payload.textModel) return payload;
+  return { ...payload, textModel: model };
+}
+
+function attachSlideModels(payload: any) {
+  const models = currentAgentModels();
+  return {
+    ...payload,
+    writerModel: payload?.writerModel || models.slideWriter,
+    criticModel: payload?.criticModel || models.critic,
+  };
+}
+
 export async function getClarification(
   history: ChatMessage[],
   initialInput: Presentation['initialInput'],
   newFiles: UploadedFileRef[] = [],
   presentationId?: string,
 ): Promise<RefinePresentationGoalsOutput> {
-  const result: any = await orchClarify(withAgentModel('clarifier', { history, initialInput, newFiles, presentationId }));
+  const result: any = await orchClarify(attachAgentModel('clarifier', { history, initialInput, newFiles, presentationId }));
   // Map orchestrator response and pass through structured patches/usage when present
   return {
     clarifiedGoals: result.refinedGoals,
@@ -54,23 +77,17 @@ export async function getClarification(
 }
 
 export async function getPresentationOutline(clarifiedGoals: string): Promise<{ slideTitles: string[] }> {
-  const res = await orchOutline(withAgentModel('outline', { clarifiedContent: clarifiedGoals }));
+  const res = await orchOutline(attachAgentModel('outline', { clarifiedContent: clarifiedGoals }));
   return { slideTitles: res.outline, _usage: (res as any).usage } as any;
 }
 
 export async function generateSlideContent(input: GenerateSlideContentInput): Promise<GenerateSlideContentOutput> {
-  const out = await orchWriteSlide(withSlideModels(input));
+  const out = await orchWriteSlide(attachSlideModels(input));
   return out.slides || [];
 }
 
 function clientBase(): string {
-  if (typeof window !== 'undefined') {
-    const env = process.env.NEXT_PUBLIC_ADK_BASE_URL;
-    if (env && /^https?:\/\//.test(env)) return env;
-    const { protocol, hostname, port } = window.location;
-    return `${protocol}//${hostname}${port === '3000' ? ':18088' : (port ? ':'+port : '')}`;
-  }
-  return process.env.ADK_BASE_URL || '';
+  return resolveAdkBaseUrl();
 }
 
 export async function generateImage(prompt: string, opts?: { baseImage?: string; imageModel?: string; slide?: { title?: string; content?: string[]; speakerNotes?: string }; theme?: 'brand'|'muted'|'dark'; pattern?: 'gradient'|'shapes'|'grid'|'dots'|'wave' }): Promise<{ imageUrl: string }> {
@@ -117,22 +134,22 @@ export async function saveImageDataUrl(dataUrl: string): Promise<{ imageUrl: str
 }
 
 export async function rephraseNotes(speakerNotes: string, tone: 'professional' | 'concise'): Promise<{ rephrasedSpeakerNotes: string }> {
-  return await orchPolishNotes(withAgentModel('notesPolisher', { speakerNotes, tone }));
+  return await orchPolishNotes(attachAgentModel('notesPolisher', { speakerNotes, tone }));
 }
 
 export async function generateFullScript(slides: { title: string; content?: string[]; speakerNotes?: string }[], assetsInput: UploadedFileRef[] = []): Promise<string> {
-  const { script } = await orchScript(withAgentModel('scriptWriter', { slides, assets: assetsInput }));
+  const { script } = await orchScript(attachAgentModel('scriptWriter', { slides, assets: assetsInput }));
   return script;
 }
 
 export async function craftImagePrompt(slide: { title: string; content?: string[]; speakerNotes?: string }, opts?: { theme?: 'brand'|'muted'|'dark'; pattern?: 'gradient'|'shapes'|'grid'|'dots'|'wave'|'topography'|'hexagons'; screenshotDataUrl?: string; textModel?: string; preferCode?: boolean; iconPack?: 'lucide'|'tabler'|'heroicons' }): Promise<string | { type: 'code'; code: { css?: string; svg?: string } }> {
-  const res = await orchDesignPrompt(withAgentModel('design', { slide, ...opts }));
+  const res = await orchDesignPrompt(attachAgentModel('design', { slide, ...opts }));
   if (res.type === 'code') return { type: 'code', code: res.code || {} };
   return res.prompt || '';
 }
 
 export async function craftDesign(slide: { title: string; content?: string[]; speakerNotes?: string }, opts?: { theme?: string; pattern?: string; textModel?: string; preferLayout?: boolean; variants?: number; preferCode?: boolean; iconPack?: string }): Promise<{ designSpec?: any; variants?: any[] }> {
-  return await orchDesignGenerate(withAgentModel('design', { slide, ...opts }))
+  return await orchDesignGenerate(attachAgentModel('design', { slide, ...opts }))
 }
 
 export async function validateDesignCode(html?: string, css?: string, svg?: string): Promise<{ ok: boolean; warnings?: string[]; errors?: string[] }> {
@@ -148,7 +165,7 @@ export async function critiqueSlide(
   opts?: { audience?: string; tone?: string; length?: 'short'|'medium'|'long'; assets?: UploadedFileRef[]; textModel?: string; presentationId?: string; slideIndex?: number }
 ): Promise<{ title: string; content: string[]; speakerNotes: string; _review?: { issues: string[]; suggestions: string[] } }> {
   try {
-    const payload = withAgentModel('critic', { slide, ...(opts || {}) });
+    const payload = attachAgentModel('critic', { slide, ...(opts || {}) });
     const res = await orchCritiqueSlide(payload);
     const out = (res && (res as any).slide) || slide;
     const review = (res as any).review as { issues: string[]; suggestions: string[] } | undefined;

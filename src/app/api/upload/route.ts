@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { resolveAdkBaseUrl } from '@/lib/base-url';
 
 export async function POST(request: Request) {
   try {
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
     const urlPath = `/uploads/${presentationId}/${sub ? sub + '/' : ''}${safeName}`;
     // Optionally register asset in Arango via api-gateway
     try {
-      const base = process.env.ADK_BASE_URL || process.env.NEXT_PUBLIC_ADK_BASE_URL || ''
+      const base = resolveAdkBaseUrl()
       if (base && presentationId) {
         await fetch(`${base}/v1/arango/assets/register`, {
           method: 'POST',
