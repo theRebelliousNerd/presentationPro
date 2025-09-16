@@ -5,7 +5,7 @@ from google.adk.tools import google_search
 # ADK Agent Definition
 root_agent = Agent(
     name="design",
-    model="gemini-2.0-flash",
+    model="gemini-2.5-flash",
     description="Creates visual design specifications and layout recommendations",
     instruction="""You are a Design agent for presentation visual aesthetics. Your role is to:
 

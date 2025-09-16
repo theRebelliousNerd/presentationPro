@@ -24,6 +24,7 @@ from .tool_wrappers import (
     TelemetryWrapper,
     VisionWrapper,
     WebSearchWrapper,
+    DesignWrapper,
 )
 
 __version__ = "1.0.0"
@@ -40,6 +41,7 @@ __all__ = [
     "TelemetryWrapper",
     "AssetsWrapper",
     "CompositeToolWrapper",
+    "DesignWrapper",
     # Schemas
     "ToolDefinition",
     "ListToolsRequest",

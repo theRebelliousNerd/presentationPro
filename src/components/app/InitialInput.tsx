@@ -18,6 +18,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Checkbox } from '@/components/ui/checkbox';
 
 type InitialInputProps = {
+  presentation: Presentation;
   onStart: (values: Presentation["initialInput"]) => void;
   uploadFile: (file: File) => Promise<UploadedFileRef>;
 };
@@ -25,7 +26,7 @@ type InitialInputProps = {
 const TONE_LABELS = ['Very Casual', 'Casual', 'Neutral', 'Formal', 'Very Formal'];
 const ENERGY_LABELS = ['Very Low', 'Low', 'Neutral', 'High', 'Very High'];
 
-export default function InitialInput({ onStart, uploadFile }: InitialInputProps) {
+export default function InitialInput({ presentation, onStart, uploadFile }: InitialInputProps) {
   const [text, setText] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [styleFiles, setStyleFiles] = useState<File[]>([]);
@@ -36,6 +37,9 @@ export default function InitialInput({ onStart, uploadFile }: InitialInputProps)
   const [subIndustries, setSubIndustries] = useState<string[]>([]);
   const [tone, setTone] = useState({ formality: 2, energy: 2 });
   const [graphicStyle, setGraphicStyle] = useState('modern');
+  const [template, setTemplate] = useState<string>('');
+  // Map special sentinel values from Select to internal state
+  const handleTemplateChange = (v: string) => setTemplate(v === 'none' ? '' : v);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -58,10 +62,14 @@ export default function InitialInput({ onStart, uploadFile }: InitialInputProps)
     let styleFilesData: UploadedFileRef[] = [];
     try {
       if (files.length > 0) {
-        contentFilesData = await Promise.all(files.map(uploadFile));
+        contentFilesData = await Promise.all(files.map(f => uploadFile(f as File) as any).map(async (p, i) => {
+          try { return await p } catch { return { name: files[i].name, url: '' } as any }
+        }))
       }
       if (styleFiles.length > 0) {
-        styleFilesData = await Promise.all(styleFiles.map(uploadFile));
+        styleFilesData = await Promise.all(styleFiles.map(f => uploadFile(f as File) as any).map(async (p, i) => {
+          try { return await p } catch { return { name: styleFiles[i].name, url: '' } as any }
+        }))
       }
     } catch (err) {
       console.error('File upload failed, proceeding without files', err);
@@ -79,6 +87,7 @@ export default function InitialInput({ onStart, uploadFile }: InitialInputProps)
         presentationMode, screenRatio, referenceStyle,
         allowedSources: splitComma(allowedSources), bannedSources: splitComma(bannedSources),
         accessibility: { highContrast, captions, altTextRequired }, animationLevel, interactivity: { polls: interactivityPolls, quizzes: interactivityQuizzes }, disclaimers,
+        template,
       });
       setIsSubmitting(false);
     }
@@ -114,6 +123,54 @@ export default function InitialInput({ onStart, uploadFile }: InitialInputProps)
   const [interactivityPolls, setInteractivityPolls] = useState(false)
   const [interactivityQuizzes, setInteractivityQuizzes] = useState(false)
   const [disclaimers, setDisclaimers] = useState('')
+
+  // When chat infers structure, it updates presentation.initialInput.
+  // Mirror those values here so the form auto-fills live.
+  useEffect(() => {
+    if (!presentation?.initialInput) return;
+    const i: any = presentation.initialInput;
+    // Core
+    setText(i.text || '');
+    setLength(i.length || 'medium');
+    setAudience(i.audience || 'general');
+    setIndustry(i.industry || '');
+    setSubIndustry(i.subIndustry || '');
+    setTone({
+      formality: typeof i.tone?.formality === 'number' ? i.tone.formality : 2,
+      energy: typeof i.tone?.energy === 'number' ? i.tone.energy : 2,
+    });
+    setGraphicStyle(i.graphicStyle || 'modern');
+    setTemplate(i.template || '');
+    // Advanced
+    setObjective(i.objective || '');
+    setKeyMessages(Array.isArray(i.keyMessages) ? i.keyMessages.join('\n') : (i.keyMessages || ''));
+    setMustInclude(Array.isArray(i.mustInclude) ? i.mustInclude.join('\n') : (i.mustInclude || ''));
+    setMustAvoid(Array.isArray(i.mustAvoid) ? i.mustAvoid.join('\n') : (i.mustAvoid || ''));
+    setCallToAction(i.callToAction || '');
+    setAudienceExpertise((i.audienceExpertise || 'intermediate') as any);
+    setTimeConstraintMin(i.timeConstraintMin ? String(i.timeConstraintMin) : '');
+    setSuccessCriteria(Array.isArray(i.successCriteria) ? i.successCriteria.join('\n') : (i.successCriteria || ''));
+    setCitationsRequired(!!i.citationsRequired);
+    setSlideDensity((i.slideDensity || 'normal') as any);
+    setLanguage(i.language || 'en');
+    setLocale(i.locale || 'en-US');
+    setReadingLevel((i.readingLevel || 'intermediate') as any);
+    setBrandColors(Array.isArray(i.brandColors) ? i.brandColors.join(', ') : (i.brandColors || ''));
+    setBrandFonts(Array.isArray(i.brandFonts) ? i.brandFonts.join(', ') : (i.brandFonts || ''));
+    setLogoUrl(i.logoUrl || '');
+    setPresentationMode((i.presentationMode || 'in-person') as any);
+    setScreenRatio((i.screenRatio || '16:9') as any);
+    setReferenceStyle((i.referenceStyle || 'none') as any);
+    setAllowedSources(Array.isArray(i.allowedSources) ? i.allowedSources.join(', ') : (i.allowedSources || ''));
+    setBannedSources(Array.isArray(i.bannedSources) ? i.bannedSources.join(', ') : (i.bannedSources || ''));
+    setHighContrast(!!i.accessibility?.highContrast);
+    setCaptions(!!i.accessibility?.captions);
+    setAltTextRequired(!!i.accessibility?.altTextRequired);
+    setAnimationLevel((i.animationLevel || 'minimal') as any);
+    setInteractivityPolls(!!i.interactivity?.polls);
+    setInteractivityQuizzes(!!i.interactivity?.quizzes);
+    setDisclaimers(i.disclaimers || '');
+  }, [presentation?.initialInput]);
 
   function splitLines(s: string): string[] { return s.split('\n').map(v => v.trim()).filter(Boolean) }
   function splitComma(s: string): string[] { return s.split(',').map(v => v.trim()).filter(Boolean) }
@@ -379,8 +436,22 @@ export default function InitialInput({ onStart, uploadFile }: InitialInputProps)
             </AccordionContent>
           </AccordionItem>
         </Accordion>
-         <div className="space-y-2">
-            <Label className="text-base font-headline font-semibold text-foreground">Presentation Content</Label>
+        <div className="space-y-2">
+          <Label className="text-base font-headline font-semibold text-foreground">Template Preset (Optional)</Label>
+          <CardDescription>Choose a preset that guides outline, slide density, and visual style.</CardDescription>
+          <Select value={template} onValueChange={handleTemplateChange}>
+            <SelectTrigger className="w-[280px]"><SelectValue placeholder="Select a template" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">None</SelectItem>
+              <SelectItem value="enterprise">Enterprise Pitch (C‑suite)</SelectItem>
+              <SelectItem value="startup">Startup Demo (Investors)</SelectItem>
+              <SelectItem value="academic">Academic Talk</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <Separator />
+        <div className="space-y-2">
+          <Label className="text-base font-headline font-semibold text-foreground">Presentation Content</Label>
             <CardDescription>The core material for your presentation. Paste text below and/or upload supporting documents, data, charts, etc.</CardDescription>
             <Textarea
               placeholder="Paste your presentation content here..."

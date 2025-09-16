@@ -3,7 +3,7 @@ from google.adk.agents import Agent
 # ADK Agent Definition
 root_agent = Agent(
     name="critic",
-    model="gemini-2.0-flash",
+    model="gemini-2.5-flash",
     description="Quality assurance agent enforcing presentation standards and citations",
     instruction="""You are a Critic agent for presentation quality assurance. Your role is to:
 

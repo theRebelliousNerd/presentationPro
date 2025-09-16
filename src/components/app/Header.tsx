@@ -34,8 +34,8 @@ export default function Header({ onReset, onSaveCopy, onSaveNow }: HeaderProps) 
   };
 
   return (
-    <header className="w-full bg-card shadow-lg p-4 md:p-6 border-b border-border/50">
-      <div className="container mx-auto flex justify-between items-center">
+    <header className="w-full bg-card shadow-lg p-3 md:p-4 border-b border-border/50">
+      <div className="w-full flex justify-between items-center">
         <div className="flex items-center gap-4">
           <Image
             src="/logo.png"

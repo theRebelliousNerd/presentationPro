@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { usePresentationState } from '@/hooks/use-presentation-state';
+import { usePresentationStateArango as usePresentationState } from '@/hooks/use-presentation-state-arango';
 import { Slide } from '@/lib/types';
 import Header from '@/components/app/Header';
 import InitialInput from '@/components/app/InitialInput';
@@ -82,6 +82,8 @@ export default function AppRoot({ presentationIdOverride }: { presentationIdOver
           tone: `formality:${presentation.initialInput.tone.formality}/energy:${presentation.initialInput.tone.energy}`,
           length: presentation.initialInput.length as any,
           assets: allFiles as any,
+          presentationId: presentation.id,
+          slideIndex: i,
         });
         const useAsset = (rawSlide as any).useAssetImageUrl || (rawSlide as any).assetImageUrl;
         const withId: Slide = {
@@ -90,9 +92,9 @@ export default function AppRoot({ presentationIdOverride }: { presentationIdOver
           speakerNotes: improved.speakerNotes,
           imagePrompt: (rawSlide as any).imagePrompt,
           id: nanoid(),
-          imageState: useAsset ? 'done' : 'loading',
+          imageState: 'done',
           assetImageUrl: useAsset || undefined,
-          useGeneratedImage: !useAsset,
+          useGeneratedImage: false,
           imageUrl: useAsset || undefined,
         } as Slide;
         generated.push(withId);
@@ -113,7 +115,7 @@ export default function AppRoot({ presentationIdOverride }: { presentationIdOver
 
     switch (appState) {
       case 'initial':
-        return <InitialInput onStart={handleStartClarifying} uploadFile={uploadFile} />;
+        return <InitialInput presentation={presentation} onStart={handleStartClarifying} uploadFile={uploadFile} />;
       case 'clarifying':
         return <ClarificationChat
           presentation={presentation}

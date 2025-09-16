@@ -16,6 +16,36 @@ export type Slide = {
   useGeneratedImage?: boolean;
   assetImageUrl?: string;
   designCode?: { css?: string; svg?: string };
+  // New structured spec for HTML/CSS/SVG-driven designs
+  designSpec?: {
+    tokens?: {
+      colors?: { bg?: string; primary?: string; muted?: string; text?: string };
+      textColors?: { title?: string; body?: string };
+      fonts?: { headline?: string; body?: string };
+      typeScale?: 'normal' | 'large';
+      spacing?: number; // base spacing unit in px
+      radii?: number;   // base border radius in px
+    };
+    background?: {
+      css?: string; // e.g., linear-gradient string for backgroundImage
+      svg?: string; // inline SVG overlay
+      intensity?: number; // 0..1
+      safeAreas?: { x: number; y: number; w: number; h: number }[];
+    };
+    layout?: {
+      type?: string; // e.g., 'title_bullets_left'
+      slots?: { [slotName: string]: string }; // CSS selectors for slot anchors
+      html?: string; // sanitized HTML fragment
+      css?: string;  // sanitized CSS scoped to container
+      svg?: string;  // optional additional SVG elements
+      components?: string[]; // optional component names
+    };
+    accessibility?: { minContrast?: number; warnings?: string[] };
+    variantId?: string;
+    rationale?: string;
+    score?: number;
+  };
+  criticReview?: { issues: string[]; suggestions: string[] };
   // Per-slide constraint overrides
   useConstraints?: boolean; // true=use global (default), false=use overrides
   constraintsOverride?: {
@@ -41,6 +71,7 @@ export type Presentation = {
     text: string;
     files: UploadedFileRef[];
     styleFiles: UploadedFileRef[];
+    graphicsFiles?: UploadedFileRef[];
     length: string;
     audience: string;
     industry: string;
@@ -73,6 +104,7 @@ export type Presentation = {
     animationLevel?: 'none' | 'minimal' | 'moderate' | 'high';
     interactivity?: { polls?: boolean; quizzes?: boolean };
     disclaimers?: string;
+    template?: string;
   };
   chatHistory: ChatMessage[];
   clarifiedGoals: string;

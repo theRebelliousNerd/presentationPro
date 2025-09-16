@@ -1,7 +1,14 @@
-import AppRoot from '@/components/app/AppRoot';
+'use client'
 
-export default async function SharePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  return <AppRoot presentationIdOverride={id} />;
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+
+export default function ProjectSwitcher({ params }: { params: { id: string } }) {
+  const router = useRouter()
+  useEffect(() => {
+    try { localStorage.setItem('presentationId', params.id) } catch {}
+    router.push('/')
+  }, [params?.id])
+  return null
 }
 

@@ -5,10 +5,13 @@ python-arango==7.6.2
 google-generativeai==0.7.2
 Pillow==10.4.0
 deprecated
+reportlab==4.2.2
 # ADK Dev UI Dependencies
 websockets>=12.0
 aiofiles>=23.0.0
 jinja2>=3.1.3
 python-multipart>=0.0.6
+fastmcp
+colorlog
 # ADK Core (optional - for reference implementation)
 # google-adk>=0.1.0

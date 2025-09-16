@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { useSearchCache } from '@/hooks/use-search-cache'
 import { setPricing } from '@/lib/token-meter'
 import { getAgentModels, setAgentModels } from '@/lib/agent-models'
+import { getPricingForModel } from '@/lib/model-pricing'
 
 export default function SettingsPanel() {
   const [pricePrompt, setPricePrompt] = useState<string>('0')
@@ -17,6 +18,10 @@ export default function SettingsPanel() {
   const [typeScale, setTypeScale] = useState<string>('normal')
   const [textModel, setTextModel] = useState<string>('googleai/gemini-2.5-flash')
   const [imageModel, setImageModel] = useState<string>('googleai/gemini-2.5-flash-image-preview')
+  const [iconPack, setIconPack] = useState<string>('lucide')
+  const [stylePreset, setStylePreset] = useState<string>('brand-gradient')
+  const [fontHeadline, setFontHeadline] = useState<string>('montserrat')
+  const [fontBody, setFontBody] = useState<string>('roboto')
   const { config: searchCfg, loading: searchLoading, error: searchError, apply: applySearchCfg, clear: clearSearchCache, load: loadSearchCfg } = useSearchCache();
   const [searchEnabled, setSearchEnabled] = useState<boolean>(true)
   const [searchTtl, setSearchTtl] = useState<string>('3600')
@@ -36,6 +41,10 @@ export default function SettingsPanel() {
     try { const ts = localStorage.getItem('app.typeScale'); if (ts) setTypeScale(ts) } catch {}
     try { const tm = localStorage.getItem('app.model.text'); if (tm) setTextModel(tm) } catch {}
     try { const im = localStorage.getItem('app.model.image'); if (im) setImageModel(im) } catch {}
+    try { const ip = localStorage.getItem('app.iconPack'); if (ip) setIconPack(ip) } catch {}
+    try { const sp = localStorage.getItem('app.stylePreset'); if (sp) setStylePreset(sp) } catch {}
+    try { const fh = localStorage.getItem('app.font.headline'); if (fh) setFontHeadline(fh) } catch {}
+    try { const fb = localStorage.getItem('app.font.body'); if (fb) setFontBody(fb) } catch {}
   }, [])
 
   // Agent models
@@ -53,8 +62,26 @@ export default function SettingsPanel() {
     try { localStorage.setItem('app.typeScale', typeScale) } catch {}
     try { localStorage.setItem('app.model.text', textModel) } catch {}
     try { localStorage.setItem('app.model.image', imageModel) } catch {}
+    try { localStorage.setItem('app.iconPack', iconPack) } catch {}
+    try { localStorage.setItem('app.stylePreset', stylePreset) } catch {}
+    try { localStorage.setItem('app.font.headline', fontHeadline) } catch {}
+    try { localStorage.setItem('app.font.body', fontBody) } catch {}
     setAgentModels(models)
+    try { window.dispatchEvent(new Event('settings:changed')) } catch {}
   }
+
+  // Auto-sync pricing when model changes (immediate UX)
+  useEffect(() => {
+    const p = getPricingForModel(textModel)
+    const img = getPricingForModel(imageModel)
+    if (p.promptPerM != null || p.completionPerM != null || img.imageCall != null) {
+      setPricing({
+        pricePrompt: p.promptPerM ?? undefined,
+        priceCompletion: p.completionPerM ?? undefined,
+        priceImageCall: img.imageCall ?? undefined,
+      } as any)
+    }
+  }, [textModel, imageModel])
 
   return (
     <>
@@ -83,6 +110,37 @@ export default function SettingsPanel() {
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
+          <Label htmlFor="preset">Style Preset</Label>
+          <select id="preset" className="w-full border rounded p-2 bg-background" value={stylePreset} onChange={e=>{
+            const val = e.target.value
+            setStylePreset(val)
+            switch(val){
+              case 'brand-gradient':
+                setTheme('brand'); setBgPattern('gradient'); setTypeScale('normal'); break;
+              case 'brand-shapes':
+                setTheme('brand'); setBgPattern('shapes'); setTypeScale('normal'); break;
+              case 'grid-notes':
+                setTheme('brand'); setBgPattern('grid'); setTypeScale('large'); break;
+              case 'muted-gradient':
+                setTheme('muted'); setBgPattern('gradient'); setTypeScale('normal'); break;
+              case 'dark-minimal':
+                setTheme('dark'); setBgPattern('gradient'); setTypeScale('normal'); break;
+              case 'dots-playful':
+                setTheme('brand'); setBgPattern('dots'); setTypeScale('normal'); break;
+              case 'wave-subtle':
+                setTheme('brand'); setBgPattern('wave'); setTypeScale('normal'); break;
+            }
+          }}>
+            <option value="brand-gradient">Brand Gradient</option>
+            <option value="brand-shapes">Brand Shapes</option>
+            <option value="grid-notes">Grid (Notes)</option>
+            <option value="muted-gradient">Muted Gradient</option>
+            <option value="dark-minimal">Dark Minimal</option>
+            <option value="dots-playful">Dots Playful</option>
+            <option value="wave-subtle">Wave Subtle</option>
+          </select>
+        </div>
+        <div>
           <Label htmlFor="bgpattern">Background Pattern</Label>
           <select id="bgpattern" className="w-full border rounded p-2 bg-background" value={bgPattern} onChange={e=>setBgPattern(e.target.value)}>
             <option value="gradient">Gradient</option>
@@ -90,6 +148,10 @@ export default function SettingsPanel() {
             <option value="grid">Grid</option>
             <option value="dots">Dots</option>
             <option value="wave">Wave</option>
+            <option value="topography">Topography</option>
+            <option value="hexagons">Hexagons</option>
+            <option value="diagonal">Diagonal Lines</option>
+            <option value="overlap">Overlapping Circles</option>
           </select>
         </div>
         <div>
@@ -113,6 +175,34 @@ export default function SettingsPanel() {
           <Label htmlFor="imagemodel">Image Model</Label>
           <select id="imagemodel" className="w-full border rounded p-2 bg-background" value={imageModel} onChange={e=>setImageModel(e.target.value)}>
             <option value="googleai/gemini-2.5-flash-image-preview">Gemini 2.5 Flash Image Preview</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <Label htmlFor="iconpack">Icon Pack</Label>
+        <select id="iconpack" className="w-full border rounded p-2 bg-background" value={iconPack} onChange={e=>setIconPack(e.target.value)}>
+          <option value="lucide">Lucide</option>
+          <option value="tabler">Tabler</option>
+          <option value="heroicons">Heroicons</option>
+        </select>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="headline-font">Headline Font</Label>
+          <select id="headline-font" className="w-full border rounded p-2 bg-background" value={fontHeadline} onChange={e=>setFontHeadline(e.target.value)}>
+            <option value="montserrat">Montserrat</option>
+            <option value="inter">Inter</option>
+            <option value="source">Source Sans 3</option>
+            <option value="roboto">Roboto</option>
+          </select>
+        </div>
+        <div>
+          <Label htmlFor="body-font">Body Font</Label>
+          <select id="body-font" className="w-full border rounded p-2 bg-background" value={fontBody} onChange={e=>setFontBody(e.target.value)}>
+            <option value="roboto">Roboto</option>
+            <option value="inter">Inter</option>
+            <option value="source">Source Sans 3</option>
+            <option value="montserrat">Montserrat</option>
           </select>
         </div>
       </div>

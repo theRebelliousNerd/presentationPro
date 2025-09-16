@@ -29,12 +29,35 @@ from dataclasses import dataclass, asdict
 from contextlib import asynccontextmanager
 import logging
 from functools import wraps
+import hashlib
 
 from dotenv import load_dotenv
 from arango import ArangoClient, ArangoError
 from arango.database import StandardDatabase
 from arango.collection import StandardCollection
-from google.adk.sessions import Session, SessionService, SessionError
+try:
+    from google.adk.sessions import Session, SessionService, SessionError  # type: ignore
+except Exception:
+    class SessionError(Exception):
+        pass
+
+    class Session:
+        def __init__(self, app_name: str, user_id: str, id: str | None = None, state: dict | None = None):
+            self.app_name = app_name
+            self.user_id = user_id
+            self.id = id
+            self.state = state or {}
+
+        def model_dump(self):
+            return {
+                'app_name': self.app_name,
+                'user_id': self.user_id,
+                'id': self.id,
+                'state': self.state,
+            }
+
+    class SessionService:  # minimal base
+        pass
 
 # Enhanced error handling and connection pooling
 try:
@@ -219,7 +242,9 @@ class EnhancedArangoClient:
             'speaker_notes': ['presentation_id', 'slide_index'],
             'scripts': ['presentation_id'],
             'reviews': ['presentation_id', 'agent_source'],
-            'sessions': []  # Existing collection
+            'sessions': [],  # Existing collection
+            'messages': ['presentation_id', 'agent'],
+            'assets': ['presentation_id', 'url'],
         }
         
         for collection_name, indexes in collections_config.items():
@@ -524,6 +549,207 @@ class EnhancedArangoClient:
             self._client = None
             self._db = None
             logger.info(f"Returned ArangoDB connection to pool for agent: {self.agent_name}")
+
+    async def save_message(self, presentation_id: str, agent: str, role: str, content: str, channel: str = 'llm', meta: Optional[Dict[str, Any]] = None) -> Dict:
+        """Persist a single agent message (inbound/outbound)."""
+        try:
+            doc = {
+                'presentation_id': presentation_id,
+                'agent': agent,
+                'role': role,
+                'channel': channel,
+                'content': content,
+                'created_at': datetime.now(timezone.utc).isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
+            }
+            if meta:
+                doc['meta'] = meta
+            # Ensure collection exists
+            if 'messages' not in self._collections:
+                self._collections['messages'] = self._db.collection('messages')
+            res = self._collections['messages'].insert(doc, return_new=True)
+            key = res.get('new', {}).get('_key')
+            # Also record an activity edge agents -> messages (best-effort)
+            try:
+                if not self._db.has_collection('agents'):
+                    self._db.create_collection('agents')
+                agents_col = self._db.collection('agents')
+                if not agents_col.get(agent):
+                    agents_col.insert({'_key': agent, 'name': agent, 'created_at': datetime.now(timezone.utc).isoformat()})
+                if not self._db.has_collection('activity_edges'):
+                    self._db.create_collection('activity_edges', edge=True)
+                self._db.collection('activity_edges').insert({
+                    '_from': f'agents/{agent}',
+                    '_to': f'messages/{key}',
+                    'presentation_id': presentation_id,
+                    'relation': 'logged',
+                    'created_at': datetime.now(timezone.utc).isoformat(),
+                })
+            except Exception:
+                pass
+            return {'ok': True, 'key': key}
+        except Exception as e:
+            logger.warning(f"save_message failed for {presentation_id}:{agent} - {e}")
+            return {'ok': False, 'error': str(e)}
+
+    async def list_presentations(self, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+        """List presentations metadata (newest first)."""
+        try:
+            cursor = self._db.aql.execute(
+                'FOR p IN presentations SORT p.updated_at DESC LIMIT @offset, @limit RETURN p',
+                bind_vars={'limit': int(max(1, min(200, limit))), 'offset': int(max(0, offset))}
+            )
+            return list(cursor)
+        except Exception as e:
+            logger.error(f"list_presentations failed: {e}")
+            return []
+
+    async def list_messages(self, presentation_id: str, agent: Optional[str] = None, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+        """List logged messages for a presentation, newest first."""
+        try:
+            if agent:
+                q = (
+                    'FOR m IN messages FILTER m.presentation_id == @pid AND m.agent == @agent '
+                    'SORT m.created_at DESC LIMIT @offset, @limit RETURN m'
+                )
+                bind = {'pid': presentation_id, 'agent': agent, 'limit': int(max(1, min(200, limit))), 'offset': int(max(0, offset))}
+            else:
+                q = (
+                    'FOR m IN messages FILTER m.presentation_id == @pid '
+                    'SORT m.created_at DESC LIMIT @offset, @limit RETURN m'
+                )
+                bind = {'pid': presentation_id, 'limit': int(max(1, min(200, limit))), 'offset': int(max(0, offset))}
+            cursor = self._db.aql.execute(q, bind_vars=bind)
+            return list(cursor)
+        except Exception as e:
+            logger.error(f"list_messages failed: {e}")
+            return []
+
+    async def register_asset(self, presentation_id: str, category: str, name: str, url: str, *, path: str | None = None, size: int | None = None, mime: str | None = None) -> dict:
+        """Register or update an uploaded asset record for a presentation."""
+        try:
+            self._ensure_simple_collection('assets')
+            col = self._collections['assets']
+            now = datetime.now(timezone.utc).isoformat()
+            payload = {
+                'presentation_id': presentation_id,
+                'category': (category or 'general').lower(),
+                'name': name,
+                'url': url,
+                'path': path,
+                'size': size,
+                'mime': mime,
+                'updated_at': now,
+            }
+            payload = {k: v for k, v in payload.items() if v is not None}
+            cursor = self._db.aql.execute(
+                'FOR a IN assets FILTER a.presentation_id == @pid AND a.url == @url LIMIT 1 RETURN a',
+                bind_vars={'pid': presentation_id, 'url': url},
+            )
+            existing = list(cursor)
+            if existing:
+                asset = existing[0]
+                key = asset.get('_key') or (asset.get('_id', '').split('/')[-1] if asset.get('_id') else None)
+                if key:
+                    asset['_key'] = key
+                else:
+                    key = self._make_asset_key(presentation_id, url, name)
+                    asset['_key'] = key
+                asset.update(payload)
+                asset.setdefault('created_at', now)
+                col.update(asset)
+                stored = col.get(asset['_key']) if asset.get('_key') else asset
+                return {'ok': True, 'asset': stored}
+            doc = payload
+            doc['_key'] = self._make_asset_key(presentation_id, url, name)
+            doc['created_at'] = now
+            meta = col.insert(doc, return_new=True)
+            stored = meta.get('new', doc)
+            return {'ok': True, 'asset': stored}
+        except Exception as e:
+            logger.error(f'register_asset failed: {e}')
+            return {'ok': False, 'error': str(e)}
+
+    def _make_asset_key(self, presentation_id: str, url: str, name: str | None = None) -> str:
+        base = f"{presentation_id}:{url or name or ''}"
+        digest = hashlib.sha1(base.encode('utf-8', 'ignore')).hexdigest()[:16]
+        prefix = ''.join(c for c in presentation_id if c.isalnum() or c in '-_') or 'asset'
+        return f"{prefix}-{digest}"
+    # --- Project graph helpers ---
+    def _ensure_simple_collection(self, name: str):
+        try:
+            if name not in self._collections:
+                if not self._db.has_collection(name):
+                    self._db.create_collection(name)
+                self._collections[name] = self._db.collection(name)
+        except Exception as e:
+            logger.warning(f"Failed to ensure collection {name}: {e}")
+
+    async def upsert_presentation_metadata(self, presentation_id: str, patch: Dict[str, Any]) -> Dict:
+        try:
+            self._ensure_simple_collection('presentations')
+            col = self._collections['presentations']
+            doc = col.get({'_key': presentation_id}) or col.get(presentation_id)
+            if not doc:
+                doc = {'_key': presentation_id, 'presentation_id': presentation_id, 'user_id': 'default', 'created_at': datetime.now(timezone.utc).isoformat()}
+            doc.update({k: v for k, v in (patch or {}).items()})
+            doc['updated_at'] = datetime.now(timezone.utc).isoformat()
+            if col.has(doc.get('_key')):
+                col.update(doc)
+            else:
+                col.insert(doc)
+            return {'ok': True}
+        except Exception as e:
+            logger.error(f"upsert_presentation_metadata failed: {e}")
+            return {'ok': False, 'error': str(e)}
+
+    async def create_project_node(self, presentation_id: str, node_type: str, data: Dict[str, Any]) -> Dict:
+        try:
+            self._ensure_simple_collection('project_nodes')
+            col = self._collections['project_nodes']
+            doc = {
+                'presentation_id': presentation_id,
+                'node_type': node_type,
+                'data': data,
+                'created_at': datetime.now(timezone.utc).isoformat(),
+                'updated_at': datetime.now(timezone.utc).isoformat(),
+            }
+            meta = col.insert(doc, return_new=True)
+            return {'ok': True, 'node': meta.get('new')}
+        except Exception as e:
+            logger.error(f"create_project_node failed: {e}")
+            return {'ok': False, 'error': str(e)}
+
+    async def create_project_link(self, presentation_id: str, relation: str, from_node: Dict[str, Any], to_node: Dict[str, Any], meta: Optional[Dict[str, Any]] = None) -> Dict:
+        try:
+            self._ensure_simple_collection('project_links')
+            col = self._collections['project_links']
+            doc = {
+                'presentation_id': presentation_id,
+                'relation': relation,
+                'from': from_node.get('_id') or from_node.get('_key'),
+                'to': to_node.get('_id') or to_node.get('_key'),
+                'meta': meta or {},
+                'created_at': datetime.now(timezone.utc).isoformat(),
+            }
+            col.insert(doc)
+            return {'ok': True}
+        except Exception as e:
+            logger.error(f"create_project_link failed: {e}")
+            return {'ok': False, 'error': str(e)}
+
+    async def get_reviews(self, presentation_id: str, slide_index: int, limit: int = 10, offset: int = 0) -> List[Dict]:
+        """List saved critic reviews for a slide (newest first). Supports offset for pagination."""
+        try:
+            cursor = self._db.aql.execute(
+                'FOR r IN reviews FILTER r.presentation_id == @pid AND r.slide_index == @idx '
+                'SORT r.created_at DESC LIMIT @offset, @limit RETURN r',
+                bind_vars={'pid': presentation_id, 'idx': int(slide_index), 'limit': int(max(1, min(limit, 50))), 'offset': int(max(0, offset))}
+            )
+            return list(cursor)
+        except Exception as e:
+            logger.error(f"Failed to fetch reviews for {presentation_id}:{slide_index} - {e}")
+            return []
 
 
 class ArangoSessionService(SessionService):

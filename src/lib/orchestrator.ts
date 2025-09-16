@@ -4,11 +4,17 @@ type Fetcher = typeof fetch;
 import { getAgentModels } from '@/lib/agent-models'
 
 function baseUrl() {
-  // Prefer explicit envs; fallback to Docker service; host fallback for local testing
+  // Prefer browser-exposed env; fallback to server env for server-side only; then internal; then host mapping
+  if (typeof window !== 'undefined') {
+    return (
+      process.env.NEXT_PUBLIC_ADK_BASE_URL ||
+      `${window.location.protocol}//${window.location.hostname}${window.location.port === '3000' ? ':18088' : (window.location.port ? ':'+window.location.port : '')}`
+    );
+  }
   return (
     process.env.ADK_BASE_URL ||
     process.env.NEXT_PUBLIC_ADK_BASE_URL ||
-    'http://adkpy:8088'
+    'http://api-gateway:8088'
   );
 }
 
@@ -37,8 +43,11 @@ async function postJSON<T>(path: string, body: any, fetcher: Fetcher = fetch): P
 export async function orchClarify(input: any): Promise<{ refinedGoals: string; finished: boolean }> { return postJSON('/v1/clarify', input); }
 export async function orchOutline(input: any): Promise<{ outline: string[] }> { return postJSON('/v1/outline', input); }
 export async function orchWriteSlide(input: any): Promise<{ slides: any[] }> { return postJSON('/v1/slide/write', input); }
+export async function orchCritiqueSlide(input: any): Promise<{ slide: any }> { return postJSON('/v1/slide/critique', input); }
 export async function orchPolishNotes(input: any): Promise<{ rephrasedSpeakerNotes: string }> { return postJSON('/v1/slide/polish_notes', input); }
 export async function orchDesignPrompt(input: any): Promise<{ type: 'prompt'|'code'; prompt?: string; code?: { css?: string; svg?: string }; usage?: any }> { return postJSON('/v1/slide/design', input); }
+// New: full design generation (structured designSpec and variants)
+export async function orchDesignGenerate(input: any): Promise<{ designSpec?: any; variants?: any[]; usage?: any }> { return postJSON('/v1/slide/design', input); }
 export async function orchScript(input: any): Promise<{ script: string }> { return postJSON('/v1/script/generate', input); }
 export async function orchIngest(input: any): Promise<{ ok: boolean }> { return postJSON('/v1/ingest', input); }
 export async function orchRetrieve(input: any): Promise<{ chunks: { name: string; text: string; url?: string }[] }> { return postJSON('/v1/retrieve', input); }
@@ -47,6 +56,10 @@ export async function orchResearchBackgrounds(input: { textModel?: string; query
 
 export async function orchSearchCacheConfig(input: { enabled?: boolean; cacheTtl?: number }): Promise<{ enabled: boolean; cacheTtl: number }> { return postJSON('/v1/search/cache/config', input); }
 export async function orchSearchCacheClear(input: { deleteFile?: boolean; path?: string } = {}): Promise<{ ok: boolean }> { return postJSON('/v1/search/cache/clear', input); }
+
+// Design validation/sanitization
+export async function orchDesignValidate(input: { html?: string; css?: string; svg?: string }): Promise<{ ok: boolean; warnings?: string[]; errors?: string[] }> { return postJSON('/v1/design/validate', input); }
+export async function orchDesignSanitize(input: { html?: string; css?: string; svg?: string }): Promise<{ html?: string; css?: string; svg?: string; warnings?: string[] }> { return postJSON('/v1/design/sanitize', input); }
 
 // Helpers to attach models based on agent
 export function withAgentModel(agent: keyof ReturnType<typeof getAgentModels>, payload: any) {
@@ -58,4 +71,11 @@ export function withAgentModel(agent: keyof ReturnType<typeof getAgentModels>, p
 export function withSlideModels(payload: any) {
   const models = getAgentModels()
   return { ...payload, writerModel: models.slideWriter, criticModel: models.critic }
+}
+// Reviews listing from Arango
+export async function orchListReviews(presentationId: string, slideIndex: number, limit = 10): Promise<{ data?: { created_at?: string; agent_source?: string; review_data?: any }[]; success?: boolean; error?: string }> {
+  const call = () => fetch(`${baseUrl()}/v1/arango/presentations/${encodeURIComponent(presentationId)}/slides/${slideIndex}/reviews?limit=${limit}`);
+  const res = await withRetry(call, 1, 500);
+  if (!res.ok) throw new Error(`Orchestrator error ${res.status}: ${await res.text()}`);
+  return await res.json();
 }

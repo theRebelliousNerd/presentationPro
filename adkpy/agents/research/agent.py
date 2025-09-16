@@ -5,7 +5,7 @@ from google.adk.tools import google_search
 # ADK Agent Definition
 root_agent = Agent(
     name="research",
-    model="gemini-2.0-flash",
+    model="gemini-2.5-flash",
     description="Gathers background information and supporting data for presentations",
     instruction="""You are a Research agent for presentation content. Your role is to:
 

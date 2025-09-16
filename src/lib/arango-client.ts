@@ -8,7 +8,24 @@
 import type { Presentation, AppState } from './types';
 
 // Configuration from environment
-const ADK_BASE_URL = process.env.NEXT_PUBLIC_ADK_BASE_URL || 'http://localhost:8089';
+// Prefer runtime detection on the client to avoid hardcoding a stale host:port
+const BUILD_BASE_URL = process.env.NEXT_PUBLIC_ADK_BASE_URL;
+
+function runtimeBaseUrl(): string {
+  // Client-side: derive from env or window location
+  if (typeof window !== 'undefined') {
+    if (BUILD_BASE_URL && /^https?:\/\//.test(BUILD_BASE_URL)) return BUILD_BASE_URL;
+    const { protocol, hostname, port } = window.location;
+    // If running the web app on :3000, the API gateway is on :18088 (docker-compose mapping)
+    if (port === '3000') {
+      return `${protocol}//${hostname}:18088`;
+    }
+    // Otherwise, try same-origin
+    return `${protocol}//${hostname}${port ? `:${port}` : ''}`;
+  }
+  // Server-side (Next.js server actions): use internal docker service if available
+  return process.env.ADK_BASE_URL || 'http://api-gateway:8088';
+}
 const DISABLE_ARANGO = process.env.NEXT_PUBLIC_DISABLE_ARANGO === 'true';
 
 interface ArangoResponse<T = any> {
@@ -58,7 +75,7 @@ class ArangoClient {
   private baseUrl: string;
 
   constructor() {
-    this.baseUrl = ADK_BASE_URL;
+    this.baseUrl = runtimeBaseUrl();
   }
 
   private async request<T = any>(
@@ -170,7 +187,7 @@ class ArangoClient {
         operation: 'save_outline',
         data: {
           presentation_id: presentation.id,
-          outline: presentation.outline.map(slide => slide.title),
+          outline: presentation.outline,
         },
       });
     }
@@ -230,10 +247,7 @@ class ArangoClient {
 
     // Convert outline
     if (state.outline?.outline) {
-      presentation.outline = state.outline.outline.map((title, index) => ({
-        title,
-        description: '',
-      }));
+      presentation.outline = [...state.outline.outline];
     }
 
     // Convert slides
@@ -241,11 +255,15 @@ class ArangoClient {
       presentation.slides = state.slides
         .sort((a, b) => a.slide_index - b.slide_index)
         .map(slide => ({
+          id: `${state.metadata?.presentation_id || fallbackPresentation.id}:${slide.slide_index}`,
           title: slide.title,
           content: slide.content,
           speakerNotes: slide.speaker_notes,
           imagePrompt: slide.image_prompt,
-        }));
+          // Avoid auto image generation on load; render code/gradient backgrounds
+          imageState: 'done',
+          useGeneratedImage: false,
+        } as any));
     }
 
     return presentation;
@@ -347,6 +365,37 @@ export async function savePresentation(presentation: Presentation): Promise<void
       console.warn('Failed to persist presentation locally:', e);
     }
   }
+}
+
+// --- Project listing and management ---
+
+export async function listPresentations(limit = 50): Promise<{ presentation_id: string; user_id?: string; title?: string; status?: string; created_at?: string; updated_at?: string }[]> {
+  const base = runtimeBaseUrl()
+  try {
+    const res = await fetch(`${base}/v1/arango/presentations?limit=${limit}`)
+    if (!res.ok) return []
+    const js = await res.json() as any
+    if (js && js.success && Array.isArray(js.data)) return js.data
+  } catch {}
+  return []
+}
+
+export async function createPresentationRecord(presentationId: string, userId = 'default'): Promise<boolean> {
+  const base = runtimeBaseUrl()
+  try {
+    const res = await fetch(`${base}/v1/arango/presentations`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ presentation_id: presentationId, user_id: userId, status: 'initial' }) })
+    return res.ok
+  } catch { return false }
+}
+
+export async function initProject(presentationId: string, initialInput: any): Promise<boolean> {
+  const base = runtimeBaseUrl()
+  try {
+    const res = await fetch(`${base}/v1/arango/presentations/${encodeURIComponent(presentationId)}/init`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ initialInput })
+    })
+    return res.ok
+  } catch { return false }
 }
 
 /**

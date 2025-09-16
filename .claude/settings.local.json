@@ -81,7 +81,10 @@
       "Bash(xargs -r docker rmi -f)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:google.github.io)",
-      "mcp__playwright__browser_select_option"
+      "mcp__playwright__browser_select_option",
+      "mcp__playwright__browser_fill_form",
+      "Bash(git add:*)",
+      "Bash(git reset:*)"
     ],
     "deny": [],
     "ask": []

@@ -3,7 +3,7 @@ from google.adk.agents import Agent
 # ADK Agent Definition
 root_agent = Agent(
     name="script_writer",
-    model="gemini-2.0-flash",
+    model="gemini-2.5-flash",
     description="Writes complete presentation scripts and talking tracks",
     instruction="""You are a Script Writer agent for presentation narratives. Your role is to:
 

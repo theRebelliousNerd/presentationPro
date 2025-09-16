@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Any
 import logging
 import asyncio
 from datetime import datetime
+import os
 
 # Import the existing ArangoDB client
 try:
@@ -109,6 +110,19 @@ async def create_presentation(request: CreatePresentationRequest):
             success=False,
             error=str(e)
         )
+
+@router.get("/presentations", response_model=ArangoResponse)
+async def list_presentations(limit: int = 50, offset: int = 0):
+    """List presentations metadata"""
+    try:
+        client = await get_arango_client()
+        if not client:
+            return ArangoResponse(success=False, error="ArangoDB not available", message="Using localStorage fallback")
+        items = await client.list_presentations(limit=limit, offset=offset)
+        return ArangoResponse(success=True, data=items)
+    except Exception as e:
+        logger.error(f"Failed to list presentations: {e}")
+        return ArangoResponse(success=False, error=str(e))
 
 @router.put("/presentations/{presentation_id}/status", response_model=ArangoResponse)
 async def update_presentation_status(presentation_id: str, request: UpdateStatusRequest):
@@ -231,6 +245,15 @@ async def batch_operations(request: BatchRequest):
                         result = await client.save_slide(slide_content)
                     results.append({"operation": "save_slides", "count": len(data["slides"])})
 
+                elif operation.operation == "save_review":
+                    data = operation.data
+                    result = await client.save_review(
+                        presentation_id=data["presentation_id"],
+                        slide_index=int(data["slide_index"]),
+                        review_data=data.get("review_data", {})
+                    )
+                    results.append({"operation": "save_review", "result": result})
+
                 elif operation.operation == "save_goals":
                     # Store clarified goals as a special clarification entry
                     data = operation.data
@@ -297,6 +320,19 @@ async def arango_health_check():
             }
         )
 
+# Messages listing
+@router.get("/presentations/{presentation_id}/messages", response_model=ArangoResponse)
+async def list_messages(presentation_id: str, agent: Optional[str] = None, limit: int = 50, offset: int = 0):
+    try:
+        client = await get_arango_client()
+        if not client:
+            return ArangoResponse(success=False, error="ArangoDB not available")
+        rows = await client.list_messages(presentation_id, agent=agent, limit=limit, offset=offset)
+        return ArangoResponse(success=True, data=rows)
+    except Exception as e:
+        logger.error(f"Failed to list messages: {e}")
+        return ArangoResponse(success=False, error=str(e))
+
 # Cleanup function for application shutdown
 async def cleanup_arango_client():
     """Clean up ArangoDB client connection"""
@@ -309,3 +345,84 @@ async def cleanup_arango_client():
             logger.error(f"Error closing ArangoDB client: {e}")
         finally:
             arango_client = None
+
+# Reviews listing
+@router.get("/presentations/{presentation_id}/slides/{slide_index}/reviews", response_model=ArangoResponse)
+async def list_reviews(presentation_id: str, slide_index: int, limit: int = 10, offset: int = 0):
+    try:
+        client = await get_arango_client()
+        if not client:
+            return ArangoResponse(success=False, error="ArangoDB not available")
+        rows = await client.get_reviews(presentation_id, slide_index, limit, offset)
+        # Normalize response: only return review_data + timestamps
+        data = [
+            {
+                'created_at': r.get('created_at'),
+                'agent_source': r.get('agent_source'),
+                'review_data': r.get('review_data') or {},
+            }
+            for r in rows
+        ]
+        return ArangoResponse(success=True, data=data)
+    except Exception as e:
+        logger.error(f"Failed to list reviews: {e}")
+        return ArangoResponse(success=False, error=str(e))
+
+# --- Project initialization ---
+class InitProjectRequest(BaseModel):
+    initialInput: Dict[str, Any]
+
+@router.post("/presentations/{presentation_id}/init", response_model=ArangoResponse)
+async def init_project(presentation_id: str, body: InitProjectRequest):
+    try:
+        client = await get_arango_client()
+        if not client:
+            return ArangoResponse(success=False, error="ArangoDB not available")
+
+        # Ensure local folders exist
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'public', 'uploads', presentation_id))
+        folders = {
+            'base': base_dir,
+            'content': os.path.join(base_dir, 'content'),
+            'style': os.path.join(base_dir, 'style'),
+            'graphics': os.path.join(base_dir, 'graphics'),
+        }
+        for p in folders.values():
+            try:
+                os.makedirs(p, exist_ok=True)
+            except Exception:
+                pass
+
+        # Upsert presentation metadata with folder links
+        await client.upsert_presentation_metadata(presentation_id, {
+            'folders': {
+                'baseUrl': f"/uploads/{presentation_id}/",
+                'contentUrl': f"/uploads/{presentation_id}/content/",
+                'styleUrl': f"/uploads/{presentation_id}/style/",
+                'graphicsUrl': f"/uploads/{presentation_id}/graphics/",
+            },
+            'preferences': body.initialInput,
+        })
+
+        # Create nodes
+        cfg = await client.create_project_node(presentation_id, 'config', body.initialInput)
+        content_node = await client.create_project_node(presentation_id, 'content', { 'folderUrl': f"/uploads/{presentation_id}/content/" })
+        style_node = await client.create_project_node(presentation_id, 'style', { 'folderUrl': f"/uploads/{presentation_id}/style/" })
+        graphics_node = await client.create_project_node(presentation_id, 'graphics', { 'folderUrl': f"/uploads/{presentation_id}/graphics/" })
+
+        def unwrap(n):
+            return (n or {}).get('node', {})
+        await client.create_project_link(presentation_id, 'has_config', { '_id': f'presentations/{presentation_id}' }, unwrap(cfg))
+        await client.create_project_link(presentation_id, 'has_content', { '_id': f'presentations/{presentation_id}' }, unwrap(content_node))
+        await client.create_project_link(presentation_id, 'has_style', { '_id': f'presentations/{presentation_id}' }, unwrap(style_node))
+        await client.create_project_link(presentation_id, 'has_graphics', { '_id': f'presentations/{presentation_id}' }, unwrap(graphics_node))
+
+        return ArangoResponse(success=True, data={ 'folders': {
+            'baseUrl': f"/uploads/{presentation_id}/",
+            'contentUrl': f"/uploads/{presentation_id}/content/",
+            'styleUrl': f"/uploads/{presentation_id}/style/",
+            'graphicsUrl': f"/uploads/{presentation_id}/graphics/",
+        } })
+    except Exception as e:
+        logger.error(f"init_project failed: {e}")
+        return ArangoResponse(success=False, error=str(e))

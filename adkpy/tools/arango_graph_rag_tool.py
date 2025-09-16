@@ -15,6 +15,7 @@ Implementation
 from __future__ import annotations
 
 from typing import List, Optional, Dict, Any
+import re
 from pydantic import BaseModel, Field
 
 from app.db import get_db, ensure_view
@@ -57,9 +58,20 @@ class ArangoGraphRAGTool:
     edge_col = self.db.collection("doc_edges")
     num_docs = 0
     num_chunks = 0
+    # Helper to build safe Arango _key parts (allow alnum, underscore, dash, dot, colon)
+    def _safe_key_part(s: str) -> str:
+      s = (s or "").strip()
+      s = re.sub(r"[^A-Za-z0-9_\-:\.]", "_", s)
+      # avoid empty segments and overly long keys
+      return (s or "key")[:200]
+
     for a in assets:
       kind = a.kind or ("image" if a.name.lower().endswith((".png",".jpg",".jpeg",".webp",".gif",".svg")) else "document")
-      doc_key = f"{a.presentationId}:{a.name}"
+      # Sanitize key parts to avoid illegal document keys in Arango
+      safe_pid = _safe_key_part(a.presentationId)
+      # Reuse DocumentDoc's name sanitizer via model validation below, but ensure key part is safe too
+      safe_name_for_key = _safe_key_part(a.name)
+      doc_key = f"{safe_pid}:{safe_name_for_key}"
       doc_model = DocumentDoc(
         key=doc_key,
         presentationId=a.presentationId,
@@ -67,7 +79,7 @@ class ArangoGraphRAGTool:
         url=a.url,
         kind=kind,  # type: ignore[arg-type]
       )
-      doc_payload = doc_model.model_dump(by_alias=True)
+      doc_payload = {k: v for k, v in doc_model.model_dump(by_alias=True).items() if v is not None}
       if doc_col.has(doc_key):
         doc_col.update(doc_payload)
       else:
@@ -86,7 +98,7 @@ class ArangoGraphRAGTool:
             name=doc_model.name,
             text=p,
           )
-          chunk_payload = chunk_model.model_dump(by_alias=True)
+          chunk_payload = {k: v for k, v in chunk_model.model_dump(by_alias=True).items() if v is not None}
           if chunk_col.has(chunk_key):
             chunk_col.update(chunk_payload)
           else:
@@ -102,13 +114,34 @@ class ArangoGraphRAGTool:
 
   def retrieve(self, presentation_id: str, query: str, limit: int = 5) -> RetrieveResponse:
     view = ensure_view(self.db)
-    aql = f"""
+    # Advanced query: combine phrase, token, and filename matches with boosts
+    aql_adv = f"""
+    FOR d IN {view}
+      SEARCH d.presentationId == @pid AND MIN_MATCH(
+        BOOST(ANALYZER(PHRASE(d.text, @q), 'text_en'), 1.3),
+        ANALYZER(d.text IN TOKENS(@q, 'text_en'), 'text_en'),
+        BOOST(ANALYZER(d.name IN TOKENS(@q, 'norm_en'), 'norm_en'), 1.5)
+      , 1)
+      SORT BM25(d) DESC, TFIDF(d) DESC
+      LIMIT @limit
+      RETURN {{ "name": d.name, "text": d.text }}
+    """
+    try:
+      cursor = self.db.aql.execute(aql_adv, bind_vars={"pid": presentation_id, "q": query, "limit": limit})
+      items = [RetrievedChunk(**row) for row in cursor]
+      if items:
+        return RetrieveResponse(chunks=items)
+    except Exception:
+      # Fall back to simpler query with built-in analyzer only
+      pass
+
+    aql_simple = f"""
     FOR d IN {view}
       SEARCH d.presentationId == @pid AND ANALYZER(d.text IN TOKENS(@q, 'text_en'), 'text_en')
       SORT BM25(d) DESC
       LIMIT @limit
-      RETURN {{ name: d.name, text: d.text }}
+      RETURN {{ "name": d.name, "text": d.text }}
     """
-    cursor = self.db.aql.execute(aql, bind_vars={"pid": presentation_id, "q": query, "limit": limit})
+    cursor = self.db.aql.execute(aql_simple, bind_vars={"pid": presentation_id, "q": query, "limit": limit})
     items = [RetrievedChunk(**row) for row in cursor]
     return RetrieveResponse(chunks=items)

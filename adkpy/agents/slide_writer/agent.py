@@ -3,7 +3,7 @@ from google.adk.agents import Agent
 # ADK Agent Definition
 root_agent = Agent(
     name="slide_writer",
-    model="gemini-2.0-flash",
+    model="gemini-2.5-flash",
     description="Generates comprehensive slide content including bullets, notes, and image prompts",
     instruction="""You are a Slide Writer agent for presentation creation. Your role is to:
 

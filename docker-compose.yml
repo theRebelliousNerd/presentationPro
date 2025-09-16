@@ -1,4 +1,3 @@
-version: '3.8'
 
 services:
   # Frontend Service
@@ -11,13 +10,18 @@ services:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_ORCH_MODE=adk
+      - NEXT_PUBLIC_ADK_BASE_URL=http://localhost:18088
       - ADK_BASE_URL=http://api-gateway:8088
       - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-50}
     depends_on:
       - api-gateway
     networks:
       - frontend-network
       - backend-network
+      - database-network
+    volumes:
+      - uploads-data:/app/public/uploads
 
   # API Gateway Service (formerly orchestrator)
   api-gateway:
@@ -26,11 +30,15 @@ services:
       dockerfile: Dockerfile
     container_name: presentationpro-api-gateway
     ports:
-      - "8080:8080"
-      - "8089:8089"
       - "18088:8088"
     environment:
       - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - ARANGODB_URL=http://arangodb:8529
+      - ARANGODB_USER=root
+      - ARANGODB_PASSWORD=${ARANGO_ROOT_PASSWORD:-root}
+      - ARANGODB_DB=presentpro
+      - ENABLE_GEMINI_IMAGE=${ENABLE_GEMINI_IMAGE:-false}
+      - GEMINI_IMAGE_MODEL=${GEMINI_IMAGE_MODEL:-gemini-2.5-flash-image-preview}
       - CLARIFIER_URL=http://clarifier:10001
       - OUTLINE_URL=http://outline:10002
       - SLIDE_WRITER_URL=http://slide-writer:10003
@@ -39,6 +47,10 @@ services:
       - DESIGN_URL=http://design:10006
       - SCRIPT_WRITER_URL=http://script-writer:10007
       - RESEARCH_URL=http://research:10008
+      - VISIONCV_URL=http://visioncv:9170/mcp
+      - VISIONCV_AUTO_QA=${VISIONCV_AUTO_QA:-false}
+      - DESIGN_USE_VISIONCV=${DESIGN_USE_VISIONCV:-false}
+      - RESEARCH_USE_VISIONCV=${RESEARCH_USE_VISIONCV:-false}
       - ARANGO_URL=http://arangodb:8529
     depends_on:
       - clarifier
@@ -49,12 +61,15 @@ services:
       - design
       - script-writer
       - research
+      - visioncv
       - arangodb
     networks:
       - backend-network
       - database-network
+    volumes:
+      - uploads-data:/app/public/uploads
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8088/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -252,6 +267,27 @@ services:
       timeout: 5s
       retries: 3
 
+  # VisionCV MCP Server
+  visioncv:
+    build:
+      context: ./visioncv
+      dockerfile: Dockerfile
+    container_name: presentationpro-visioncv
+    ports:
+      - "9170:9170"
+    environment:
+      - VISIONCV_MCP_TRANSPORT=http
+      - VISIONCV_HOST=0.0.0.0
+      - VISIONCV_PORT=9170
+      - VISIONCV_HTTP_PATH=/mcp
+    networks:
+      - backend-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9170/mcp" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
   # Orchestrate Agent (A2A coordinator)
   orchestrate:
     build:
@@ -322,7 +358,7 @@ services:
     networks:
       - database-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8529/_api/version"]
+      test: ["CMD-SHELL", "curl -sf -u root:${ARANGO_ROOT_PASSWORD:-root} http://localhost:8529/_api/version || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -338,3 +374,4 @@ networks:
 volumes:
   arangodb-data:
   arangodb-apps:
+  uploads-data:

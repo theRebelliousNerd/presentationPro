@@ -24,6 +24,10 @@ from web_search_tool import WebSearchTool, WebResult
 from vision_contrast_tool import VisionContrastTool, VisionAnalyzeInput, VisionAnalyzeOutput
 from telemetry_tool import TelemetryTool, TelemetryEvent
 from assets_ingest_tool import AssetsIngestTool, IngestAssetInput, IngestSummary
+from app.design_sanitize import (
+    validate_html, validate_css, validate_svg,
+    sanitize_html, sanitize_css, sanitize_svg,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -475,3 +479,49 @@ class CompositeToolWrapper(BaseToolWrapper):
     def cleanup(self):
         """Cleanup all sub-tools"""
         self.telemetry.cleanup()
+
+
+class DesignWrapper(BaseToolWrapper):
+    """Wrapper for design validation/sanitization utilities"""
+
+    def _initialize_tool(self):
+        self.tool = True
+
+    def validate(self, html: str | None = None, css: str | None = None, svg: str | None = None) -> Dict[str, Any]:
+        ok = True
+        warnings: list[str] = []
+        errors: list[str] = []
+        if html:
+            ok_h, w_h, e_h = validate_html(html)
+            ok = ok and ok_h
+            warnings += w_h
+            errors += e_h
+        if css:
+            ok_c, w_c, e_c = validate_css(css)
+            ok = ok and ok_c
+            warnings += w_c
+            errors += e_c
+        if svg:
+            ok_s, w_s, e_s = validate_svg(svg)
+            ok = ok and ok_s
+            warnings += w_s
+            errors += e_s
+        return { 'ok': bool(ok), 'warnings': warnings, 'errors': errors }
+
+    def sanitize(self, html: str | None = None, css: str | None = None, svg: str | None = None) -> Dict[str, Any]:
+        out: Dict[str, Any] = {}
+        warnings: list[str] = []
+        if html:
+            h, w = sanitize_html(html)
+            out['html'] = h
+            warnings += w
+        if css:
+            c, w = sanitize_css(css)
+            out['css'] = c
+            warnings += w
+        if svg:
+            s, w = sanitize_svg(svg)
+            out['svg'] = s
+            warnings += w
+        out['warnings'] = warnings
+        return out

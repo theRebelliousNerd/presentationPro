@@ -15,6 +15,7 @@ const getInitialState = (id: string): {
       text: '',
       files: [],
       styleFiles: [],
+      graphicsFiles: [],
       length: 'medium',
       audience: 'general',
       industry: '',
@@ -66,7 +67,7 @@ export function usePresentationStateArango(presentationIdOverride?: string): {
   presentation: Presentation;
   setPresentation: Dispatch<SetStateAction<Presentation>>;
   resetState: () => void;
-  uploadFile: (file: File) => Promise<UploadedFileRef>;
+  uploadFile: (file: File, category?: 'content'|'style'|'graphics') => Promise<UploadedFileRef>;
   duplicatePresentation: () => Promise<string>;
   saveNow: () => Promise<void>;
 } {
@@ -104,22 +105,29 @@ export function usePresentationStateArango(presentationIdOverride?: string): {
             if (arangoPresentation) {
               setPresentation(arangoPresentation);
 
-              // Determine app state from loaded data
-              const savedAppState = localStorage.getItem('appState') as AppState | null;
-              if (savedAppState && VALID_APP_STATES.includes(savedAppState)) {
-                setAppState(savedAppState);
-              } else {
-                const derived: AppState = arangoPresentation.slides.length > 0
-                  ? 'editing'
-                  : arangoPresentation.outline.length > 0
-                  ? 'generating'
-                  : arangoPresentation.clarifiedGoals
-                  ? 'approving'
-                  : arangoPresentation.chatHistory.length > 0
-                  ? 'clarifying'
-                  : 'initial';
-                setAppState(derived);
-              }
+              // Determine app state from loaded data and prefer most-advanced stage
+              const stageOrder: Record<AppState, number> = {
+                initial: 0,
+                clarifying: 1,
+                approving: 2,
+                generating: 3,
+                editing: 4,
+                error: -1,
+              };
+              const derived: AppState = arangoPresentation.slides.length > 0
+                ? 'editing'
+                : arangoPresentation.outline.length > 0
+                ? 'generating'
+                : arangoPresentation.clarifiedGoals
+                ? 'approving'
+                : arangoPresentation.chatHistory.length > 0
+                ? 'clarifying'
+                : 'initial';
+              const savedAppState = (localStorage.getItem('appState') as AppState | null) || null;
+              const resolved = (savedAppState && VALID_APP_STATES.includes(savedAppState))
+                ? (stageOrder[derived] > stageOrder[savedAppState] ? derived : savedAppState)
+                : derived;
+              setAppState(resolved);
               return;
             }
           }
@@ -200,7 +208,7 @@ export function usePresentationStateArango(presentationIdOverride?: string): {
     setIsLoaded(true);
   }, [presentation]);
 
-  const uploadFile = async (file: File): Promise<UploadedFileRef> => {
+  const uploadFile = async (file: File, category?: 'content'|'style'|'graphics'): Promise<UploadedFileRef> => {
     // Ensure we have a presentation ID for namespacing uploads
     let idToUse = presentation.id;
     if (!idToUse) {
@@ -217,6 +225,7 @@ export function usePresentationStateArango(presentationIdOverride?: string): {
     form.append('file', file);
     form.append('presentationId', idToUse!);
     form.append('filename', file.name);
+    if (category) form.append('category', category);
     const res = await fetch('/api/upload', { method: 'POST', body: form });
     if (!res.ok) throw new Error('Local upload failed');
     const data = await res.json();

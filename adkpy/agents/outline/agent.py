@@ -3,7 +3,7 @@ from google.adk.agents import Agent
 # ADK Agent Definition
 root_agent = Agent(
     name="outline",
-    model="gemini-2.0-flash-exp",
+    model="gemini-2.5-flash",
     description="Generates structured slide outlines from clarified presentation goals",
     instruction="""You are an expert presentation outliner.
 

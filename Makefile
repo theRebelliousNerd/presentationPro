@@ -245,3 +245,8 @@ quick-test: up-dev test down-dev ## Quick test: start dev environment, run tests
 REPLICAS ?= 2
 AGENT ?= clarifier
 BACKUP_DIR ?= ./backups/latest
+visioncv-up:
+	docker compose up -d visioncv api-gateway
+
+visioncv-it: visioncv-up
+	python adkpy/tests/integration/test_visioncv_proxy.py

@@ -26,8 +26,11 @@ class AgentUsage(BaseModel):
 
 
 class AgentResult(BaseModel):
-    """Standard result format for all agents."""
-    data: Dict[str, Any]
+    """Standard result format for all agents.
+
+    'data' can be any JSON-serializable payload (dict, list, str, etc.).
+    """
+    data: Any
     usage: AgentUsage
 
 
@@ -80,6 +83,8 @@ class ClarifierInput(BaseModel):
     initialInput: Dict[str, Any] = Field(description="Initial user request")
     newFiles: Optional[List[Dict[str, Any]]] = None
     textModel: Optional[str] = Field(None, description="Model to use for this request")
+    presentationId: Optional[str] = Field(None, description="Presentation ID for context retrieval")
+    assetContext: Optional[List[str]] = Field(None, description="Retrieved context snippets from assets")
 
 
 class ClarifierAgent(BaseAgentWrapper):
@@ -96,37 +101,73 @@ class ClarifierAgent(BaseAgentWrapper):
 
         system_prompt = (
             "You are a Clarifier agent for presentation creation.\n\n"
-            "Your task is to refine a user's vague request into clear presentation goals.\n\n"
+            "Your task is to refine a user's request into clear presentation goals and pre-fill ALL form fields: parameters, advanced clarity, and presentation content.\n\n"
             "Process:\n"
-            "1. Review the conversation history and initial request\n"
-            "2. If goals are unclear, ask ONE targeted question about:\n"
-            "   - Target audience and their background\n"
-            "   - Presentation length and format\n"
-            "   - Key topics and messages to convey\n"
-            "   - Tone and style preferences\n"
-            "   - Success criteria and goals\n"
-            "3. When you have sufficient information (usually after 3-5 questions), provide a clear summary\n\n"
-            "Output Format:\n"
-            "Return a JSON object with exactly these fields:\n"
+            "1. Review the conversation history and the initial request.\n"
+            "2. Consider uploaded assets and retrieved snippets; infer how each file should be used.\n"
+            "3. Ask ONE targeted question per turn if needed, prioritizing:\n"
+            "   - How to use specific files (content vs style/brand vs graphics)\n"
+            "   - Target audience and background\n"
+            "   - Presentation length and mode\n"
+            "   - Industry/sub-industry and tone/style\n"
+            "   - Key messages, constraints, and success criteria\n"
+            "4. When sufficient info is available, provide a concise summary and a structured patch to the preference fields.\n\n"
+            "Instructions:\n"
+            "- If the user already provided content, keep it in 'text' and optionally refine it (do not discard).\n"
+            "- If content is unstructured, summarize into bullet points under 'text'.\n"
+            "- Tone sliders are integers 0..4 for formality and energy.\n"
+            "- 'length' is one of short|medium|long.\n"
+            "- Prefer brand colors/fonts from assets or design system if none given.\n\n"
+            "Output Format (JSON only):\n"
             "{\n"
             '  "response": "Your clarifying question OR final summary of presentation requirements",\n'
-            '  "finished": false  // Set to true ONLY when you have enough information to proceed\n'
-            "}\n\n"
-            "Important:\n"
-            "- Ask only ONE question at a time\n"
-            "- Be conversational and helpful\n"
-            "- Focus on understanding the user's needs\n"
-            "- Set finished=true only when you have clear, actionable requirements\n"
-            "- Always return valid JSON"
+            '  "finished": false,\n'
+            '  "fileIntents": [ { "name": "brand-guidelines.pdf", "intent": "style", "notes": "Use colors & logo" } ],\n'
+            '  "initialInputPatch": {\n'
+            '     "text": "(preserved or refined content)",\n'
+            '     "length": "short|medium|long",\n'
+            '     "audience": "...",\n'
+            '     "industry": "...",\n'
+            '     "subIndustry": "...",\n'
+            '     "tone": { "formality": 0, "energy": 0 },\n'
+            '     "graphicStyle": "modern|minimalist|corporate|playful|elegant|retro|art-deco|turn-of-the-century",\n'
+            '     "template": "enterprise|startup|academic|...",\n'
+            '     "objective": "...",\n'
+            '     "keyMessages": ["..."],\n'
+            '     "mustInclude": ["..."],\n'
+            '     "mustAvoid": ["..."],\n'
+            '     "callToAction": "...",\n'
+            '     "audienceExpertise": "beginner|intermediate|expert",\n'
+            '     "timeConstraintMin": 20,\n'
+            '     "successCriteria": ["..."],\n'
+            '     "citationsRequired": false,\n'
+            '     "slideDensity": "light|normal|dense",\n'
+            '     "language": "en",\n'
+            '     "locale": "en-US",\n'
+            '     "readingLevel": "basic|intermediate|advanced",\n'
+            '     "brandColors": ["#192940","#556273","#73BF50"],\n'
+            '     "brandFonts": ["Montserrat","Roboto"],\n'
+            '     "logoUrl": "...",\n'
+            '     "presentationMode": "in-person|virtual|hybrid",\n'
+            '     "screenRatio": "16:9|4:3|1:1",\n'
+            '     "referenceStyle": "none|apa|mla|chicago",\n'
+            '     "allowedSources": [".gov",".edu"],\n'
+            '     "bannedSources": ["..."],\n'
+            '     "animationLevel": "none|minimal|moderate|high"\n'
+            '  }\n'
+            "}"
         )
 
         history_transcript = "\n".join([f"{msg.get('role', 'unknown')}: {msg.get('content', '')}" for msg in data.history])
 
+        # Include brief mention of attached assets
+        files_desc = ", ".join([f.get("name") for f in (data.newFiles or []) if f.get("name")])
         prompt_parts = [
             system_prompt,
             f"\nInitial user request: '{initial_prompt}'",
-            f"\nProvided assets: {asset_names}" if asset_names else "\nNo new assets provided.",
+            f"\nAttached files: {files_desc}" if files_desc else "\nNo files attached.",
             f"\nHere is the conversation history:\n{history_transcript}",
+            ("\nRelevant context from uploaded assets (snippets):\n" + "\n---\n".join((data.assetContext or [])[:5])) if data.assetContext else "",
             "\nBased on all this, decide if you need to ask another question or if you can summarize. Then, provide the appropriate JSON output."
         ]
 
@@ -135,7 +176,13 @@ class ClarifierAgent(BaseAgentWrapper):
         try:
             cleaned_text = text.strip().removeprefix("```json").removesuffix("```")
             obj = json.loads(cleaned_text)
-            output_data = {"response": obj.get("response", ""), "finished": obj.get("finished", False)}
+            output_data = {
+                "response": obj.get("response", ""),
+                "finished": obj.get("finished", False),
+            }
+            patch = obj.get("initialInputPatch")
+            if isinstance(patch, dict):
+                output_data["initialInputPatch"] = patch
         except (json.JSONDecodeError, TypeError):
             output_data = {
                 "response": "I'm having trouble understanding. Could you please rephrase your goal?",
@@ -222,8 +269,10 @@ class SlideWriterAgent(BaseAgentWrapper):
             self.set_model(model)
 
         # Generate slides for all titles in the outline
-        slides = []
-        total_usage = {"input_tokens": 0, "output_tokens": 0}
+        slides: List[Dict[str, Any]] = []
+        total_prompt_tokens = 0
+        total_completion_tokens = 0
+        total_duration_ms = 0
 
         for slide_title in data.outline:
             system_prompt = (
@@ -281,10 +330,21 @@ class SlideWriterAgent(BaseAgentWrapper):
                 }
 
             slides.append(slide_data)
-            total_usage["input_tokens"] += usage.get("input_tokens", 0)
-            total_usage["output_tokens"] += usage.get("output_tokens", 0)
+            try:
+                total_prompt_tokens += int(getattr(usage, "promptTokens", 0) or 0)
+                total_completion_tokens += int(getattr(usage, "completionTokens", 0) or 0)
+                total_duration_ms += int(getattr(usage, "durationMs", 0) or 0)
+            except Exception:
+                pass
 
-        return AgentResult(data=slides, usage=total_usage)
+        agg_usage = AgentUsage(
+            model=self.model,
+            promptTokens=total_prompt_tokens,
+            completionTokens=total_completion_tokens,
+            durationMs=total_duration_ms,
+        )
+
+        return AgentResult(data=slides, usage=agg_usage)
 
 
 # ============= Critic Agent Wrapper =============
@@ -295,6 +355,8 @@ class CriticInput(BaseModel):
     audience: Optional[str] = None
     tone: Optional[str] = None
     textModel: Optional[str] = Field(None, description="Model to use for this request")
+    presentationId: Optional[str] = Field(None, description="Presentation ID (for persistence)")
+    slideIndex: Optional[int] = Field(None, description="Slide index (for persistence)")
 
 
 class CriticAgent(BaseAgentWrapper):
@@ -305,11 +367,40 @@ class CriticAgent(BaseAgentWrapper):
         if data.textModel:
             self.set_model(data.textModel)
 
-        # For now, return the slide as-is (in production, would provide critique)
-        return AgentResult(
-            data=data.slide,
-            usage=AgentUsage(model=self.model)
+        slide = data.slide or {}
+        title = slide.get("title", "Untitled")
+        content = slide.get("content", [])
+        notes = slide.get("speakerNotes", "")
+
+        system = (
+            "You are a Critic agent for slide quality. Improve content while preserving intent.\n"
+            "- 3–5 concise bullets\n- Avoid redundancy\n- Strong verbs\n- Consistent parallelism\n"
+            "- Ensure notes are clear and actionable\n- Improve title clarity if needed\n\n"
+            "Output JSON: {\n  \"slide\": {\"title\":..., \"content\": [...], \"speakerNotes\": ...},\n  \"review\": {\"issues\": [...], \"suggestions\": [...]}\n}"
         )
+
+        prompt_parts = [
+            system,
+            f"Audience: {data.audience or 'general'}; Tone: {data.tone or 'neutral'}",
+            f"Title: {title}",
+            f"Bullets: {json.dumps(content)}",
+            f"Notes: {notes}",
+            "Return JSON only."
+        ]
+
+        text, usage = self.llm(prompt_parts)
+        try:
+            cleaned = text.strip().removeprefix("```json").removesuffix("```")
+            obj = json.loads(cleaned)
+            out_slide = obj.get("slide") or {
+                "title": title,
+                "content": content,
+                "speakerNotes": notes,
+            }
+            review = obj.get("review") or {"issues": [], "suggestions": []}
+            return AgentResult(data={"slide": out_slide, "review": review}, usage=usage)
+        except Exception:
+            return AgentResult(data={"slide": slide, "review": {"issues": [], "suggestions": []}}, usage=usage)
 
 
 # ============= NotesPolisher Agent Wrapper =============
@@ -370,7 +461,11 @@ class DesignInput(BaseModel):
     theme: Optional[str] = None
     pattern: Optional[str] = None
     preferCode: Optional[bool] = False
+    preferLayout: Optional[bool] = False
+    variants: Optional[int] = 0
     textModel: Optional[str] = Field(None, description="Model to use for this request")
+    iconPack: Optional[str] = Field(None, description="Icon pack preference (lucide|tabler|heroicons)")
+    screenshotDataUrl: Optional[str] = None
 
 
 class DesignAgent(BaseAgentWrapper):
@@ -384,15 +479,187 @@ class DesignAgent(BaseAgentWrapper):
         slide_title = data.slide.get("title", "Untitled")
         slide_content = data.slide.get("content", [])
 
-        if data.preferCode:
-            # Generate CSS/SVG code for the slide
+        # Helper palettes per theme
+        theme = (data.theme or 'brand').lower()
+        palettes = {
+            'brand': { 'bg': '#192940', 'primary': '#73BF50', 'muted': '#556273', 'text': '#FFFFFF' },
+            'muted': { 'bg': '#3C4650', 'primary': '#D2D2D2', 'muted': '#6E7780', 'text': '#F0F0F0' },
+            'dark':  { 'bg': '#121418', 'primary': '#5A6E82', 'muted': '#22282E', 'text': '#E0E0E0' },
+        }
+        colors = palettes.get(theme, palettes['brand'])
+        spacing = 8
+        radii = 12
+
+        def make_background(pattern: str, intensity: float = 0.3):
+            # Simple gradient + optional pattern overlay
+            css_bg = "linear-gradient(135deg, rgba(102,126,234,0.35) 0%, rgba(118,75,162,0.35) 100%)"
+            svg_overlay = None
+            pat = (pattern or "").lower()
+            if pat in ("topography", "hexagons", "grid", "dots", "wave", "shapes", "diagonal"):
+                if pat == "topography":
+                    svg_overlay = (
+                        '<svg xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" viewBox="0 0 160 120">'
+                        '<path d="M0,60 C40,40 120,80 160,60" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>'
+                        '<path d="M0,90 C30,70 130,110 160,90" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>'
+                        '<path d="M0,30 C50,20 110,40 160,30" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>'
+                        '</svg>'
+                    )
+                elif pat == "hexagons":
+                    svg_overlay = (
+                        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 34.64">'
+                        '<polygon points="20,0 40,10 40,24.64 20,34.64 0,24.64 0,10" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="1" />'
+                        '</svg>'
+                    )
+                elif pat == "grid":
+                    svg_overlay = (
+                        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">'
+                        '<path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1" />'
+                        '</svg>'
+                    )
+                elif pat == "dots":
+                    svg_overlay = (
+                        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720">'
+                        + ''.join([f'<circle cx="{(i*80)%1280}" cy="{(i*50)%720}" r="3" fill="rgba(255,255,255,0.06)" />' for i in range(0,60)])
+                        + '</svg>'
+                    )
+                elif pat == "wave":
+                    svg_overlay = (
+                        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720">'
+                        '<path d="M0,420 C320,320 560,520 1280,380 L1280,720 L0,720 Z" fill="rgba(255,255,255,0.08)" />'
+                        '<path d="M0,520 C320,420 560,620 1280,480 L1280,720 L0,720 Z" fill="rgba(255,255,255,0.05)" />'
+                        '</svg>'
+                    )
+                elif pat == "diagonal":
+                    svg_overlay = (
+                        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">'
+                        '<rect width="10" height="20" fill="rgba(255,255,255,0.06)" />'
+                        '</svg>'
+                    )
+                elif pat == "shapes":
+                    svg_overlay = (
+                        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720">'
+                        '<circle cx="192" cy="144" r="120" fill="rgba(255,255,255,0.12)" />'
+                        '<rect x="900" y="420" width="260" height="260" rx="16" fill="rgba(255,255,255,0.06)" />'
+                        '</svg>'
+                    )
+            return css_bg, svg_overlay, max(0.0, min(1.0, intensity))
+
+        def make_layout():
+            html = (
+                "<section class=\"slide\">"
+                "  <div class=\"pad\">"
+                "    <h1 id=\"slot-title\"></h1>"
+                "    <ul id=\"slot-bullets\"></ul>"
+                "  </div>"
+                "</section>"
+            )
+            css = (
+                ".slide{position:absolute;inset:0;display:flex;align-items:center;}"
+                ".slide .pad{width:80%;margin-left:10%;}"
+                ".slide h1{color:var(--color-text-title, var(--color-text,#fff));font-family:var(--font-headline,Montserrat,sans-serif);font-weight:600;margin-bottom:calc(var(--space,8px)*2);}"
+                ".slide ul{color:var(--color-text-body, var(--color-text,#fff));font-family:var(--font-body,Roboto,sans-serif);padding-left:24px;display:grid;row-gap:calc(var(--space,8px)*1.5);}"
+            )
+            slots = { 'title': '#slot-title', 'bullets': '#slot-bullets' }
+            return html, css, slots
+
+        if data.preferCode or data.preferLayout:
+            # Generate CSS/SVG code for the slide. css = value suitable for `backgroundImage` style.
+            css_bg, svg_overlay, intensity = make_background((data.pattern or "gradient"), 0.3)
+
+            # Optional icon overlay
+            try:
+                from tools.assets_catalog_tool import get_icon_svg
+                pack = (data.iconPack or "lucide").lower()
+                # Heuristic: choose icon based on title/content
+                t = (slide_title or "").lower() + " " + " ".join([str(x).lower() for x in slide_content])
+                icon_candidates = [
+                    ("light-bulb", ["idea", "insight", "tip", "strategy", "vision"]),
+                    ("check", ["done", "complete", "benefit", "advantage", "success"]),
+                    ("chart-bar", ["metric", "chart", "growth", "kpi", "results"]),
+                    ("info", ["note", "info", "details", "learn"]),
+                ]
+                chosen = None
+                for name, kws in icon_candidates:
+                    if any(k in t for k in kws):
+                        chosen = name
+                        break
+                chosen = chosen or "light-bulb"
+                icon_svg = get_icon_svg(pack, chosen)
+                if icon_svg:
+                    # Strip outer <svg> wrapper roughly
+                    inner = icon_svg
+                    try:
+                        s = icon_svg.find('>')
+                        e = icon_svg.rfind('</svg>')
+                        if s != -1 and e != -1:
+                            inner = icon_svg[s+1:e]
+                    except Exception:
+                        pass
+                    # Compose icon into overlay (top-right corner)
+                    icon_group = f'<svg x="1120" y="40" width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">{inner}</svg>'
+                    if svg_overlay and svg_overlay.startswith('<svg'):
+                        # insert icon before closing
+                        svg_overlay = svg_overlay[:-6] + icon_group + '</svg>'
+                    else:
+                        svg_overlay = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720">{icon_group}</svg>'
+            except Exception:
+                pass
+            # Compose designSpec and optional variants
+            html, css, slots = make_layout() if data.preferLayout else (None, None, None)  # type: ignore
+            design_spec = {
+                "tokens": {
+                    "colors": colors,
+                    "typeScale": "normal",
+                    "spacing": spacing,
+                    "radii": radii,
+                },
+                "background": {
+                    "css": css_bg,
+                    "svg": svg_overlay,
+                    "intensity": intensity,
+                    "safeAreas": [{"x": 64, "y": 96, "w": 960, "h": 420}],
+                },
+            }
+            if html and css and slots:
+                design_spec["layout"] = { "type": "title_bullets_left", "html": html, "css": css, "slots": slots }
+
+            variants = []
+            try:
+                n = max(0, min(int(data.variants or 0), 4))
+                for i in range(n):
+                    css_v, svg_v, inten_v = make_background((data.pattern or "gradient"), 0.2 + 0.1 * i)
+                    variants.append({
+                        "designSpec": {
+                            **design_spec,
+                            "background": { **design_spec["background"], "css": css_v, "svg": svg_v, "intensity": inten_v },
+                        },
+                        "variantId": f"v{i+1}",
+                        "score": 0.7 + 0.05 * i,
+                        "rationale": "Variant with adjusted intensity",
+                    })
+            except Exception:
+                pass
+
             output_data = {
                 "type": "code",
-                "code": {
-                    "css": f"/* CSS for {slide_title} */\n.slide {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }}",
-                    "svg": f'<svg viewBox="0 0 100 100"><text x="50" y="50">{slide_title}</text></svg>'
-                }
+                "code": {"css": css_bg, "svg": svg_overlay},
+                "designSpec": design_spec,
+                "variants": variants,
             }
+            # Optional VisionCV placement hints
+            try:
+                import os, httpx
+                if os.environ.get('DESIGN_USE_VISIONCV', 'false').lower() == 'true' and (data.screenshotDataUrl or data.slide.get('screenshotDataUrl')):
+                    base = os.environ.get('ADK_BASE_URL', 'http://localhost:8088')
+                    url = (base or '').rstrip('/') + '/v1/visioncv/placement'
+                    body = { 'screenshotDataUrl': data.screenshotDataUrl or data.slide.get('screenshotDataUrl') }
+                    with httpx.Client(timeout=8.0) as client:
+                        r = client.post(url, json=body)
+                        if r.status_code == 200:
+                            placement = r.json()
+                            output_data['designSpec']['placementCandidates'] = placement.get('candidates', [])
+            except Exception:
+                pass
         else:
             # Generate image prompt
             theme_desc = f" with {data.theme} theme" if data.theme else ""
@@ -473,27 +740,109 @@ class ResearchInput(BaseModel):
     topK: Optional[int] = 5
     allowDomains: Optional[List[str]] = None
     textModel: Optional[str] = Field(None, description="Model to use for this request")
+    imageDataUrl: Optional[str] = None
+    chartImageDataUrl: Optional[str] = None
+    chartType: Optional[str] = None
 
 
 class ResearchAgent(BaseAgentWrapper):
     """Wrapper for the Research microservice agent."""
 
     def run(self, data: ResearchInput) -> AgentResult:
-        """Perform research with model configuration."""
+        """Perform research with ADK built-in tools when available, else fallback to WebSearchTool."""
         if data.textModel:
             self.set_model(data.textModel)
 
-        # For now, return placeholder rules
-        # In production, would use web search and other tools
-        output_data = {
-            "rules": [
-                "Use consistent color scheme throughout",
-                "Limit text to 6 lines per slide",
-                "Include relevant visuals on each slide"
+        query = (data.query or '').strip() or 'presentation design best practices'
+        top_k = max(1, int(data.topK or 5))
+        allow = data.allowDomains or []
+
+        # Try ADK built-in Google Search tool first (Gemini 2 only), then fallback
+        items: list[dict] = []
+        used = 'fallback'
+        try:
+            # Lazy import; only available if google-adk is installed
+            from agents.tools.google_search import GoogleSearchTool  # type: ignore
+            gs = GoogleSearchTool()
+            results = gs.search(query=query, max_results=top_k)
+            for r in results or []:
+                try:
+                    url = getattr(r, 'url', None) or (r.get('url') if isinstance(r, dict) else None)
+                    title = getattr(r, 'title', None) or (r.get('title') if isinstance(r, dict) else '')
+                    snippet = getattr(r, 'snippet', None) or (r.get('snippet') if isinstance(r, dict) else '')
+                    if url:
+                        if allow:
+                            from urllib.parse import urlparse
+                            host = (urlparse(url).hostname or '').lower()
+                            if not any(host.endswith(d.lower()) for d in allow):
+                                continue
+                        items.append({'title': title, 'url': url, 'snippet': snippet})
+                except Exception:
+                    continue
+            used = 'adk_google_search'
+        except Exception:
+            # Fallback to internal WebSearchTool (Bing or DuckDuckGo)
+            try:
+                from tools.web_search_tool import WebSearchTool
+                tool = WebSearchTool(allow_domains=allow)
+                results = tool.search(query, top_k=top_k)
+                items = [ {'title': r.title, 'url': r.url, 'snippet': r.snippet} for r in results ]
+                used = 'web_search_tool'
+            except Exception:
+                items = []
+                used = 'none'
+
+        # Optional VisionCV assisted extraction
+        extras: dict = {}
+        try:
+            import os, httpx
+            base = os.environ.get('ADK_BASE_URL', 'http://localhost:8088')
+            if os.environ.get('RESEARCH_USE_VISIONCV', 'false').lower() == 'true':
+                with httpx.Client(timeout=8.0) as client:
+                    if data.imageDataUrl:
+                        try:
+                            ocr = client.post((base.rstrip('/') + '/v1/visioncv/ocr'), json={ 'imageDataUrl': data.imageDataUrl }).json()
+                            extras['ocr'] = { 'text': ocr.get('text',''), 'words': (ocr.get('words',[])[:50] if isinstance(ocr.get('words',[]), list) else []) }
+                        except Exception:
+                            pass
+                    if data.chartImageDataUrl:
+                        try:
+                            if (data.chartType or '').lower() == 'bar':
+                                res = client.post((base.rstrip('/') + '/v1/visioncv/bar_chart'), json={ 'imageDataUrl': data.chartImageDataUrl }).json()
+                                extras['chart'] = res
+                            elif (data.chartType or '').lower() == 'line':
+                                res = client.post((base.rstrip('/') + '/v1/visioncv/line_graph'), json={ 'imageDataUrl': data.chartImageDataUrl }).json()
+                                extras['chart'] = res
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
+        # Synthesize concise design/strategy rules from results using the LLM
+        prompt_parts = [
+            "You are a presentation research assistant. Read the web results and create 5 concise, actionable rules.",
+            "Each rule should be a short imperative phrase.",
+            "Results:",
+            "\n".join([f"- {it.get('title','')}: {it.get('snippet','')} ({it.get('url','')})" for it in items[:top_k]]) or "- No results",
+            "Return JSON: { \"rules\": [\"...\", \"...\", \"...\"] }"
+        ]
+        text, usage = self.llm(prompt_parts)
+        rules: list[str]
+        try:
+            import json as _json
+            cleaned = text.strip().removeprefix('```json').removesuffix('```')
+            obj = _json.loads(cleaned)
+            rules = obj.get('rules') or []
+        except Exception:
+            rules = [
+                'Use consistent color scheme',
+                'Limit on-slide text; prefer visuals',
+                'Keep headings clear and specific',
+                'Maintain visual hierarchy and spacing',
+                'Cite sources when appropriate',
             ]
-        }
 
         return AgentResult(
-            data=output_data,
-            usage=AgentUsage(model=self.model)
+            data={ 'rules': rules, 'source': used, **({ 'extractions': extras } if extras else {}) },
+            usage=usage
         )

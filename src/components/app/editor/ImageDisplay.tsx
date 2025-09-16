@@ -5,12 +5,13 @@ import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { ImageIcon, Loader2, RefreshCw, Edit, Palette } from 'lucide-react';
 import { Slide } from '@/lib/types';
-import { craftImagePrompt, generateImage } from '@/lib/actions';
+import { craftImagePrompt, generateImage, saveImageDataUrl } from '@/lib/actions';
 import ImageEditorModal from './ImageEditorModal';
 import { addUsage } from '@/lib/token-meter';
 import * as htmlToImage from 'html-to-image';
 import { orchVisionAnalyze } from '@/lib/orchestrator';
 import { backgroundContainerClasses, getBgPattern, getTheme, renderPatternSvg, getTypeScale } from '@/lib/backgrounds';
+import DesignRenderer from '@/lib/design-renderer';
 
 type ImageDisplayProps = {
   slide: Slide;
@@ -38,11 +39,33 @@ export default function ImageDisplay({ slide, updateSlide }: ImageDisplayProps) 
     }
   })();
 
+  // Bake current rendered design to an image and set as slide image
+  const bakeToImage = async () => {
+    try {
+      if (!containerRef.current) return
+      const png = await htmlToImage.toPng(containerRef.current as unknown as HTMLElement, { pixelRatio: 1 })
+      const { imageUrl } = await saveImageDataUrl(png)
+      updateSlide(slide.id, { imageUrl, imageState: 'done', useGeneratedImage: false })
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('Bake to image failed', e)
+    }
+  }
+
+  // Listen for global bake requests
+  useEffect(() => {
+    const handler = (e: any) => { if (!e?.detail?.slideId || e.detail.slideId === slide.id) bakeToImage() }
+    window.addEventListener('slides:bakeImage', handler as any)
+    return () => window.removeEventListener('slides:bakeImage', handler as any)
+  }, [slide.id])
+
   const triggerImageGeneration = async (prompt: string, baseImage?: string) => {
     updateSlide(slide.id, { imageState: 'loading' });
     try {
       const imageModel = (typeof window !== 'undefined' && localStorage.getItem('app.model.image')) || undefined;
-      const { imageUrl } = await generateImage(prompt, { baseImage, imageModel: imageModel || undefined });
+      const theme = (typeof window !== 'undefined' && (localStorage.getItem('app.theme') as any)) || 'brand';
+      const pattern = (typeof window !== 'undefined' && (localStorage.getItem('app.bgPattern') as any)) || 'gradient';
+      const { imageUrl } = await generateImage(prompt, { baseImage, imageModel: imageModel || undefined, slide: { title: slide.title, content: slide.content, speakerNotes: slide.speakerNotes }, theme: theme as any, pattern: pattern as any });
       updateSlide(slide.id, { imageUrl, imageState: 'done' });
       addUsage({ model: 'gemini-2.5-flash-image-preview', kind: 'image_call', count: 1, at: Date.now() } as any);
     } catch (error) {
@@ -77,13 +100,27 @@ export default function ImageDisplay({ slide, updateSlide }: ImageDisplayProps) 
       }
       const theme = (typeof window !== 'undefined' && (localStorage.getItem('app.theme') as any)) || 'brand';
       const pattern = (typeof window !== 'undefined' && (localStorage.getItem('app.bgPattern') as any)) || 'gradient';
+      const iconPack = (typeof window !== 'undefined' && (localStorage.getItem('app.iconPack') as any)) || 'lucide';
       const textModel = (typeof window !== 'undefined' && (localStorage.getItem('app.model.text') as any)) || undefined;
-      const design = await craftImagePrompt({ title: slide.title, content: slide.content, speakerNotes: slide.speakerNotes }, { theme: theme as any, pattern: pattern as any, screenshotDataUrl: dataUrl, textModel, preferCode: true });
+      const design = await craftImagePrompt({ title: slide.title, content: slide.content, speakerNotes: slide.speakerNotes }, { theme: theme as any, pattern: pattern as any, screenshotDataUrl: dataUrl, textModel, preferCode: true, iconPack: iconPack as any });
       if (typeof design === 'string') {
         updateSlide(slide.id, { imagePrompt: design });
         await triggerImageGeneration(design, dataUrl);
       } else if (design && design.type === 'code') {
+        // Apply code design immediately
         updateSlide(slide.id, { designCode: design.code, useGeneratedImage: false, imageUrl: undefined, imageState: 'done' });
+        // After next paint, capture to image and save to server for canvas display
+        await new Promise(r => setTimeout(r, 60));
+        if (containerRef.current) {
+          const png = await htmlToImage.toPng(containerRef.current as unknown as HTMLElement, { pixelRatio: 1 });
+          try {
+            const { imageUrl } = await saveImageDataUrl(png);
+            updateSlide(slide.id, { imageUrl, imageState: 'done', useGeneratedImage: false });
+          } catch (e) {
+            // eslint-disable-next-line no-console
+            console.error('Saving captured design failed', e)
+          }
+        }
       }
     } catch (e) {
       console.error('Design regenerate failed', e);
@@ -132,23 +169,31 @@ export default function ImageDisplay({ slide, updateSlide }: ImageDisplayProps) 
         )
       )}
 
-      {/* Default background when not using generated image or while waiting */}
+      {/* Default background or code-driven design when not using generated image */}
       {(((slide.useGeneratedImage && !slide.imageUrl) || (!slide.useGeneratedImage && !slide.imageUrl))) && (
-        <div className="absolute inset-0">{renderBackgroundNew(slide)}</div>
+        <div className="absolute inset-0">
+          {slide.designSpec ? (
+            <DesignRenderer slide={slide} className="absolute inset-0" />
+          ) : (
+            renderBackgroundNew(slide)
+          )}
+        </div>
       )}
       {overlay > 0 && (
         <div className="absolute inset-0" style={{ backgroundColor: `rgba(0,0,0,${overlay})` }} />
       )}
 
-      {/* Text overlay preview */}
-      <div className="absolute inset-0 p-6 md:p-8 flex flex-col justify-center">
-        <h3 className={`font-headline font-semibold drop-shadow-sm mb-3 md:mb-4 ${getTypeScale()==='large' ? 'text-4xl md:text-5xl' : 'text-3xl md:text-4xl'}`}>{slide.title}</h3>
-        <ul className={`list-disc pl-5 space-y-1.5 max-w-[80%] leading-snug ${getTypeScale()==='large' ? 'text-lg md:text-xl' : 'text-base md:text-lg'}`}>
-          {(slide.content || []).map((line, idx) => (
-            <li key={idx} className="drop-shadow-sm">{line}</li>
-          ))}
-        </ul>
-      </div>
+      {/* Text overlay preview (hide when layout html exists) */}
+      {!slide.designSpec?.layout?.html && (
+        <div className="absolute inset-0 p-6 md:p-8 flex flex-col justify-center">
+          <h3 className={`font-headline font-semibold drop-shadow-sm mb-3 md:mb-4 ${getTypeScale()==='large' ? 'text-4xl md:text-5xl' : 'text-3xl md:text-4xl'}`}>{slide.title}</h3>
+          <ul className={`list-disc pl-5 space-y-1.5 max-w-[80%] leading-snug ${getTypeScale()==='large' ? 'text-lg md:text-xl' : 'text-base md:text-lg'}`}>
+            {(slide.content || []).map((line, idx) => (
+              <li key={idx} className="drop-shadow-sm">{line}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="absolute inset-0 bg-black/30 flex items-center justify-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
         <Button variant="secondary" onClick={handleRegenerate} disabled={slide.imageState === 'loading' || isDesigning}>

@@ -1,20 +1,22 @@
 'use client';
 
-import { usePresentationState } from '@/hooks/use-presentation-state';
+import { usePresentationStateArango as usePresentationState } from '@/hooks/use-presentation-state-arango';
 import { Slide } from '@/lib/types';
 import Header from '@/components/app/Header';
 import DashboardShell from '@/components/app/dashboard/DashboardShell';
-import TopStats from '@/components/app/dashboard/TopStats';
+import TopBarCompact from '@/components/app/dashboard/TopBarCompact';
 import InitialInput from '@/components/app/InitialInput';
 import OutlineApproval from '@/components/app/OutlineApproval';
 import GeneratingSpinner from '@/components/app/GeneratingSpinner';
 import Editor from '@/components/app/editor/Editor';
 import ErrorState from '@/components/app/ErrorState';
 import { generateSlideContent } from '@/lib/actions';
+import { initProject } from '@/lib/arango-client';
 import { nanoid } from 'nanoid';
 import { useRef, useState, useEffect } from 'react';
 import { addUsage, estimateTokens } from '@/lib/token-meter';
 import ClarificationChat from '@/components/app/ClarificationChat';
+import PanelController from '@/components/app/PanelController';
 import { Button } from '@/components/ui/button';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
@@ -28,30 +30,14 @@ export default function Home() {
     resetState,
     uploadFile,
     duplicatePresentation,
+    saveNow,
   } = usePresentationState();
 
   const [genProgress, setGenProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
   const cancelGenerationRef = useRef(false);
-  const [chatCollapsed, setChatCollapsed] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    try { return localStorage.getItem('chat.collapsed') === 'true'; } catch { return false }
-  });
-  // Auto-collapse when viewport is narrower and no prior preference
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const hasPref = localStorage.getItem('chat.collapsed');
-      if (!hasPref) {
-        const w = window.innerWidth;
-        if (w < 1440) setChatCollapsed(true);
-      }
-    } catch {}
-  }, []);
-  useEffect(() => {
-    try { localStorage.setItem('chat.collapsed', String(chatCollapsed)); } catch {}
-  }, [chatCollapsed]);
+  const [activeSlideIndex, setActiveSlideIndex] = useState<number | null>(null);
 
-  const handleStartClarifying = (values: {
+  const handleStartClarifying = async (values: {
     text: string;
     files: { name: string; url: string; path?: string }[];
     styleFiles: { name: string; url: string; path?: string }[];
@@ -62,12 +48,23 @@ export default function Home() {
     tone: { formality: number; energy: number };
     graphicStyle: string;
   }) => {
+    // Ensure project in Arango with folders + nodes
+    try { if (presentation.id) await initProject(presentation.id, values as any) } catch {}
     setPresentation((prev) => ({
       ...prev,
       initialInput: { ...prev.initialInput, ...values },
     }));
+    // Immediate autosave on start
+    try { setTimeout(() => { saveNow().catch(()=>{}) }, 0) } catch {}
     setAppState('clarifying');
   };
+
+  // Auto-open chat panel when entering clarifying
+  useEffect(() => {
+    if (appState === 'clarifying') {
+      try { window.dispatchEvent(new CustomEvent('panel:toggle', { detail: { panel: 'chat' } })) } catch {}
+    }
+  }, [appState])
 
   const handleOutlineApproved = async (outline: string[]) => {
     setPresentation(prev => ({...prev, outline}));
@@ -92,7 +89,7 @@ export default function Home() {
           mustAvoid: presentation.initialInput.mustAvoid,
         } as any;
         const [slide] = await generateSlideContent({ outline: [title], assets, constraints });
-        const withId: Slide = { ...slide, id: nanoid(), imageState: 'loading', useGeneratedImage: true };
+        const withId: Slide = { ...slide, id: nanoid(), imageState: 'done', useGeneratedImage: false };
         if ((slide as any).useAssetImageUrl) {
           withId.imageUrl = (slide as any).useAssetImageUrl;
           withId.assetImageUrl = (slide as any).useAssetImageUrl;
@@ -119,17 +116,13 @@ export default function Home() {
 
     switch (appState) {
       case 'initial':
-        return <InitialInput onStart={handleStartClarifying} uploadFile={uploadFile} />;
+        return <InitialInput presentation={presentation} onStart={handleStartClarifying} uploadFile={uploadFile} />;
       case 'clarifying':
-        return <ClarificationChat
-          presentation={presentation}
-          setPresentation={setPresentation}
-          onClarificationComplete={(goals) => {
-            setPresentation(prev => ({...prev, clarifiedGoals: goals}));
-            setAppState('approving');
-          }}
-          uploadFile={uploadFile}
-          />;
+        return (
+          <div className="text-center text-muted-foreground py-16">
+            <div className="text-lg">Open Chat from the left sidebar to refine your goals.</div>
+          </div>
+        );
       case 'approving':
         return <OutlineApproval
           clarifiedGoals={presentation.clarifiedGoals}
@@ -145,6 +138,7 @@ export default function Home() {
           presentation={presentation}
           setPresentation={setPresentation}
           uploadFile={uploadFile}
+          onActiveSlideChange={(idx)=> setActiveSlideIndex(idx)}
           />;
       case 'error':
         return <ErrorState onReset={resetState} />
@@ -153,49 +147,27 @@ export default function Home() {
     }
   };
 
-  const leftChat = (
-    <div className="hidden lg:block">
-      {!chatCollapsed ? (
-        <ClarificationChat
-          compact
-          presentation={presentation}
-          setPresentation={setPresentation}
-          onClarificationComplete={(goals)=>{ setPresentation(prev=>({...prev, clarifiedGoals: goals})); setAppState('approving'); }}
-          uploadFile={uploadFile}
-        />
-      ) : null}
-    </div>
-  );
+  const leftChat = null;
 
   return (
     <DashboardShell>
       <div className="flex flex-col min-h-screen bg-background">
-        <Header onReset={resetState} onSaveCopy={async () => { await duplicatePresentation(); }} />
-        <main className="flex-grow flex flex-col p-4 sm:p-6 md:p-8 gap-6">
-        {/* Top stats */}
-        <TopStats />
-        {/* Chat toggle (large screens) */}
-        <div className="hidden lg:flex fixed left-2 top-[88px] z-20">
-          <Button size="sm" variant="outline" onClick={() => setChatCollapsed(v => !v)}>
-            {chatCollapsed ? (<><PanelLeftOpen className="h-4 w-4 mr-2"/>Show Chat</>) : (<><PanelLeftClose className="h-4 w-4 mr-2"/>Hide Chat</>)}
-          </Button>
-        </div>
+        <Header onReset={resetState} onSaveCopy={async () => { await duplicatePresentation(); }} onSaveNow={async () => { await saveNow(); }} />
+        <main className="flex-grow flex flex-col p-2 md:p-3 gap-3">
+        {/* Compact status bar */}
+        <TopBarCompact />
         <div className="w-full flex gap-6">
           {leftChat}
-          <div className="flex-grow flex justify-center">
-            <div className="w-full max-w-5xl">
+          <div className={appState === 'editing' ? 'flex-grow flex' : 'flex-grow flex justify-center'}>
+            <div className={appState === 'editing' ? 'w-full' : 'w-full max-w-5xl'}>
               {/* Clarifying state: if left chat is collapsed on large screens, show chat here */}
               {appState === 'clarifying' ? (
-                chatCollapsed ? (
-                  <ClarificationChat
-                    presentation={presentation}
-                    setPresentation={setPresentation}
-                    onClarificationComplete={(goals) => { setPresentation(prev => ({...prev, clarifiedGoals: goals})); setAppState('approving'); }}
-                    uploadFile={uploadFile}
-                  />
-                ) : (
-                  <div className="hidden lg:block">{/* Content handled by left chat when expanded */}</div>
-                )
+                <ClarificationChat
+                  presentation={presentation}
+                  setPresentation={setPresentation}
+                  onClarificationComplete={(goals) => { setPresentation(prev => ({...prev, clarifiedGoals: goals})); setAppState('approving'); }}
+                  uploadFile={uploadFile}
+                />
               ) : (
                 <>{renderState()}</>
               )}
@@ -204,6 +176,14 @@ export default function Home() {
         </div>
         </main>
       </div>
+      <PanelController
+        presentation={presentation as any}
+        setPresentation={(updater:any)=> setPresentation(prev => (updater as any)(prev))}
+        appState={appState}
+        setAppState={setAppState as any}
+        uploadFile={uploadFile}
+        activeSlideIndex={activeSlideIndex ?? undefined}
+      />
     </DashboardShell>
   );
 }

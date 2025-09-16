@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, ChangeEvent, DragEvent, useRef } from 'react';
+import { useState, useCallback, ChangeEvent, DragEvent, useEffect, useRef } from 'react';
 import { UploadCloud, File as FileIcon, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -14,6 +14,12 @@ export default function FileDropzone({ onFilesChange, acceptedFormats }: FileDro
   const [isDragging, setIsDragging] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const dirInputRef = useRef<HTMLInputElement | null>(null);
+  // Stable IDs for label/htmlFor wiring without relying on useId (which may include colons)
+  const fileInputIdRef = useRef<string>(() => `fd-files-${Math.random().toString(36).slice(2)}`);
+  const dirInputIdRef = useRef<string>(() => `fd-dirs-${Math.random().toString(36).slice(2)}`);
+  const fileInputId = (typeof fileInputIdRef.current === 'function' ? (fileInputIdRef.current as any)() : fileInputIdRef.current) as string;
+  const dirInputId = (typeof dirInputIdRef.current === 'function' ? (dirInputIdRef.current as any)() : dirInputIdRef.current) as string;
 
   const handleFileChange = useCallback(
     (newFiles: FileList) => {
@@ -41,10 +47,41 @@ export default function FileDropzone({ onFilesChange, acceptedFormats }: FileDro
     e.stopPropagation();
   };
 
-  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+  const handleDrop = async (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
+    const items = e.dataTransfer.items;
+    if (items && items.length && (items as any)[0]?.webkitGetAsEntry) {
+      const filesFromDirs: File[] = [];
+      const traverse = async (entry: any, path='') => {
+        return new Promise<void>((resolve) => {
+          try {
+            if (entry.isFile) {
+              entry.file((file: File) => { filesFromDirs.push(file); resolve(); });
+            } else if (entry.isDirectory) {
+              const reader = entry.createReader();
+              reader.readEntries(async (entries: any[]) => {
+                for (const ent of entries) { await traverse(ent, path + entry.name + '/'); }
+                resolve();
+              });
+            } else { resolve(); }
+          } catch { resolve(); }
+        })
+      };
+      const tasks: Promise<void>[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const entry = (items[i] as any).webkitGetAsEntry?.();
+        if (entry) tasks.push(traverse(entry));
+      }
+      await Promise.all(tasks);
+      if (filesFromDirs.length) {
+        const all = new DataTransfer();
+        filesFromDirs.forEach(f => all.items.add(f));
+        handleFileChange(all.files);
+        return;
+      }
+    }
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       handleFileChange(e.dataTransfer.files);
     }
@@ -69,19 +106,45 @@ export default function FileDropzone({ onFilesChange, acceptedFormats }: FileDro
         onDrop={handleDrop}
         onClick={() => inputRef.current?.click()}
       >
+        {/* Keep the input present in the accessibility tree for reliable triggering */}
         <input
           type="file"
           multiple
-          className="hidden"
+          id={fileInputId}
+          className="sr-only"
           ref={inputRef}
           onChange={(e: ChangeEvent<HTMLInputElement>) => e.target.files && handleFileChange(e.target.files)}
           accept={acceptedFormats}
+        />
+        {/* Hidden directory input to select folders */}
+        <input
+          type="file"
+          multiple
+          className="sr-only"
+          ref={dirInputRef}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => e.target.files && handleFileChange(e.target.files)}
+          // @ts-ignore - nonstandard attributes for folder selection
+          webkitdirectory=""
+          // @ts-ignore
+          directory=""
+          id={dirInputId}
         />
         <div className="flex flex-col items-center gap-3 text-muted-foreground">
           <UploadCloud className="w-12 h-12 text-primary/60" />
           <p className="font-headline font-semibold text-foreground">Drag & drop files here, or click to select</p>
           <p className="text-xs font-body text-muted-foreground/80">{acceptedFormats}</p>
-        </div>
+          <div className="mt-1">
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" type="button" onClick={(e)=>{ e.stopPropagation(); try { inputRef.current?.click() } catch {} }}>
+                Select Files
+              </Button>
+              {/* Provide label/htmlFor as a robust fallback in addition to programmatic click */}
+              <label htmlFor={dirInputId} onClick={(e)=> e.stopPropagation()} className="cursor-pointer">
+                <Button variant="outline" size="sm" type="button">Select Folder</Button>
+              </label>
+            </div>
+          </div>
+      </div>
       </div>
       {files.length > 0 && (
         <div className="mt-4 space-y-3">

@@ -1,11 +1,18 @@
 import type {Metadata} from 'next';
 import { Toaster } from "@/components/ui/toaster"
 import './globals.css';
+import { Montserrat, Roboto, Inter, Source_Sans_3 } from 'next/font/google'
+import FontApply from '@/components/app/FontApply'
 
 export const metadata: Metadata = {
   title: 'Next-Gen Presentation Studio',
   description: 'Next-Gen Engineering and Research Development - Professional Presentation Creation Platform',
 };
+
+const montserrat = Montserrat({ subsets: ['latin'], variable: '--font-montserrat' })
+const roboto = Roboto({ subsets: ['latin'], weight: ['300','400','500','700'], variable: '--font-roboto' })
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
+const sourceSans3 = Source_Sans_3({ subsets: ['latin'], variable: '--font-source' })
 
 export default function RootLayout({
   children,
@@ -13,14 +20,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-        <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet" />
-      </head>
-      <body className="font-body antialiased">
+    <html lang="en" suppressHydrationWarning className={`${montserrat.variable} ${roboto.variable} ${inter.variable} ${sourceSans3.variable}`}>
+      <head></head>
+      <body className="font-body antialiased" style={{
+        // defaults
+        ['--font-headline' as any]: 'var(--font-montserrat)',
+        ['--font-body' as any]: 'var(--font-roboto)'
+      }}>
+        <FontApply />
         {children}
         <Toaster />
       </body>

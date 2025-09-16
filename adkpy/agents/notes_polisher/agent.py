@@ -3,7 +3,7 @@ from google.adk.agents import Agent
 # ADK Agent Definition
 root_agent = Agent(
     name="notes_polisher",
-    model="gemini-2.0-flash",
+    model="gemini-2.5-flash",
     description="Polishes and enhances speaker notes for presentation delivery",
     instruction="""You are a Notes Polisher agent for presentation creation. Your role is to:
 

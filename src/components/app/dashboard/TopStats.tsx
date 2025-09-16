@@ -1,7 +1,7 @@
 'use client'
 
 import { useTokenMeter } from '@/hooks/use-token-meter'
-import { usePresentationState } from '@/hooks/use-presentation-state'
+import { usePresentationStateArango as usePresentationState } from '@/hooks/use-presentation-state-arango'
 import { cn } from '@/lib/utils'
 
 function StatCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
@@ -20,7 +20,9 @@ export default function TopStats() {
   const { presentation } = usePresentationState()
   const totals = useTokenMeter()
   const slides = presentation.slides?.length || 0
-  const assets = (presentation.initialInput?.files?.length || 0) + (presentation.initialInput?.styleFiles?.length || 0)
+  const assets = (presentation.initialInput?.files?.length || 0)
+    + (presentation.initialInput?.styleFiles?.length || 0)
+    + (presentation.initialInput?.graphicsFiles?.length || 0)
   const tokensIn = totals.tokensPrompt
   const tokensOut = totals.tokensCompletion
   const cost = `$${totals.usd.toFixed(4)}`
@@ -34,4 +36,3 @@ export default function TopStats() {
     </section>
   )
 }
-

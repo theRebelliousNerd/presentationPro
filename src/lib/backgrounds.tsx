@@ -1,4 +1,4 @@
-export type BgPattern = 'gradient' | 'shapes' | 'grid' | 'dots' | 'wave';
+export type BgPattern = 'gradient' | 'shapes' | 'grid' | 'dots' | 'wave' | 'topography' | 'hexagons' | 'diagonal' | 'overlap';
 
 export function getTheme(): 'brand' | 'muted' | 'dark' {
   if (typeof window === 'undefined') return 'brand';
@@ -39,6 +39,14 @@ export function backgroundContainerClasses(theme: ReturnType<typeof getTheme>, p
       return `w-full h-full bg-gradient-to-br ${brandB}`;
     case 'wave':
       return `w-full h-full bg-gradient-to-bl ${brandA}`;
+    case 'topography':
+      return `w-full h-full bg-gradient-to-br ${brandA}`;
+    case 'hexagons':
+      return `w-full h-full bg-gradient-to-tr ${brandB}`;
+    case 'diagonal':
+      return `w-full h-full bg-gradient-to-br ${brandA}`;
+    case 'overlap':
+      return `w-full h-full bg-gradient-to-tr ${brandB}`;
   }
 }
 
@@ -57,6 +65,53 @@ export function renderPatternSvg(pattern: BgPattern) {
           </defs>
           <circle cx="15%" cy="20%" r="120" fill="url(#g1)" />
           <rect x="70%" y="60%" width="260" height="260" fill="rgba(255,255,255,0.05)" rx="16" />
+        </svg>
+      );
+    case 'topography':
+      // Simple topography-like path pattern
+      return (
+        <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+          <defs>
+            <pattern id="topo" width="160" height="120" patternUnits="userSpaceOnUse">
+              <path d="M0,60 C40,40 120,80 160,60" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="1"/>
+              <path d="M0,90 C30,70 130,110 160,90" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="1"/>
+              <path d="M0,30 C50,20 110,40 160,30" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="1"/>
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#topo)" />
+        </svg>
+      );
+    case 'hexagons':
+      // Simple hexagon tiling pattern
+      return (
+        <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="hex" width="40" height="34.64" patternUnits="userSpaceOnUse" patternTransform="translate(0,0)">
+              <polygon points="20,0 40,10 40,24.64 20,34.64 0,24.64 0,10" fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="1" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#hex)" />
+        </svg>
+      );
+    case 'diagonal':
+      return (
+        <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="diag" width="20" height="20" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+              <rect width="10" height="20" fill="rgba(255,255,255,0.06)" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#diag)" />
+        </svg>
+      );
+    case 'overlap':
+      return (
+        <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+          <g fill="rgba(255,255,255,0.06)">
+            <circle cx="20%" cy="30%" r="140" />
+            <circle cx="35%" cy="40%" r="120" />
+            <circle cx="70%" cy="60%" r="180" />
+          </g>
         </svg>
       );
     case 'grid':

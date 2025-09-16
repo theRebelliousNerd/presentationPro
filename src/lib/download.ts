@@ -50,6 +50,34 @@ ${slides.map(s => {
   triggerDownload(blob, 'presentation.html');
 }
 
+export async function exportServerHtml(presentation: { slides: Slide[]; id?: string; }): Promise<void> {
+  const base = (process.env.NEXT_PUBLIC_ADK_BASE_URL || process.env.ADK_BASE_URL || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}${window.location.port==='3000'?':18088':(window.location.port?':'+window.location.port:'')}` : '')) as string
+  try {
+    const res = await fetch(`${base}/v1/export/html`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title: presentation.id || 'Presentation', slides: presentation.slides || [] }) })
+    if (!res.ok) throw new Error('Export failed')
+    const js = await res.json()
+    if (js && js.url) {
+      window.open(js.url, '_blank')
+    }
+  } catch (e) {
+    console.error('Server HTML export failed', e)
+  }
+}
+
+export async function exportServerPdf(presentation: { slides: Slide[]; id?: string; }): Promise<void> {
+  const base = (process.env.NEXT_PUBLIC_ADK_BASE_URL || process.env.ADK_BASE_URL || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}${window.location.port==='3000'?':18088':(window.location.port?':'+window.location.port:'')}` : '')) as string
+  try {
+    const res = await fetch(`${base}/v1/export/pdf`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title: presentation.id || 'Presentation', slides: presentation.slides || [] }) })
+    if (!res.ok) throw new Error('Export failed')
+    const js = await res.json()
+    if (js && js.url) {
+      window.open(js.url, '_blank')
+    }
+  } catch (e) {
+    console.error('Server PDF export failed', e)
+  }
+}
+
 export async function downloadImages(slides: Slide[]) {
   const zip = new JSZip();
   const folder = zip.folder('images');

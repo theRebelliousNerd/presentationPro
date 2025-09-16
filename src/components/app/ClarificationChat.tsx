@@ -13,6 +13,7 @@ import FileDropzone from './FileDropzone';
 import { Skeleton } from '@/components/ui/skeleton';
 import { nanoid } from 'nanoid';
 import { addUsage, estimateTokens } from '@/lib/token-meter';
+import FormsPreviewDialog from '@/components/app/FormsPreviewDialog'
 
 type ClarificationChatProps = {
   presentation: Presentation;
@@ -54,7 +55,7 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
       if (chatHistory.length === 0) {
         setIsLoading(true);
         try {
-          const response = await getClarification([], initialInput, []);
+          const response = await getClarification([], initialInput, [], (presentation as any).id);
           const aiResponseContent = response.refinedGoals.trim();
           const newAiMessage: ChatMessage = { id: nanoid(), role: 'model', content: aiResponseContent, createdAt: Date.now() };
           setPresentation(prev => ({ ...prev, chatHistory: [newAiMessage] }));
@@ -137,7 +138,7 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
       if (messageContent.trim()) {
         addUsage({ model: 'gemini-2.5-flash', kind: 'prompt', tokens: estimateTokens(messageContent) , at: Date.now() } as any);
       }
-      const response = await getClarification(newHistory, initialInput, uploadedFileInfos);
+      const response = await getClarification(newHistory, initialInput, uploadedFileInfos, (presentation as any).id);
       const aiResponseContent = response.refinedGoals.trim();
       const newAiMessage: ChatMessage = { id: nanoid(), role: 'model', content: aiResponseContent, createdAt: Date.now() };
 
@@ -154,6 +155,46 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
       if (patch && typeof patch === 'object') {
         setPresentation(prev => ({ ...prev, initialInput: { ...prev.initialInput, ...patch } }));
       }
+
+      // Optional: apply any file intents suggested by the agent
+      try {
+        const intents = (response as any).fileIntents as { name: string; intent: 'content'|'style'|'graphics'|'ignore'; notes?: string }[] | undefined;
+        if (Array.isArray(intents) && intents.length) {
+          setPresentation(prev => {
+            const allKnown = [...prev.initialInput.files, ...prev.initialInput.styleFiles, ...(prev.initialInput.graphicsFiles || []), ...uploadedFileInfos];
+            const byName = new Map<string, typeof allKnown[number]>(allKnown.map(f => [f.name, f]));
+            const files: typeof prev.initialInput.files = [];
+            const styleFiles: typeof prev.initialInput.styleFiles = [];
+            const graphicsFiles: typeof prev.initialInput.graphicsFiles = [];
+            // Start with existing, then re-assign by intents when provided
+            const pushUnique = (arr: any[], f: any) => { if (!arr.find(x => x.name === f.name)) arr.push(f) };
+            // Default: carry over existing
+            prev.initialInput.files.forEach(f => pushUnique(files, f));
+            prev.initialInput.styleFiles.forEach(f => pushUnique(styleFiles, f));
+            (prev.initialInput.graphicsFiles || []).forEach(f => pushUnique(graphicsFiles, f));
+            // Apply intents
+            for (const it of intents) {
+              const f = it && byName.get(it.name);
+              if (!f) continue;
+              // remove from all buckets
+              const rm = (arr: any[]) => arr.filter(x => x.name !== f.name);
+              const cat = it.intent;
+              // rebuild after removals
+              const nextFiles = rm(files);
+              const nextStyle = rm(styleFiles);
+              const nextGraphics = rm(graphicsFiles || []);
+              if (cat === 'content') pushUnique(nextFiles, f);
+              else if (cat === 'style') pushUnique(nextStyle, f);
+              else if (cat === 'graphics') pushUnique(nextGraphics, f);
+              // assign
+              (files as any) = nextFiles;
+              (styleFiles as any) = nextStyle;
+              (graphicsFiles as any) = nextGraphics;
+            }
+            return { ...prev, initialInput: { ...prev.initialInput, files, styleFiles, graphicsFiles } };
+          });
+        }
+      } catch {}
       
       if (response.finished) {
         setProgress(100);
@@ -180,7 +221,12 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
   return (
     <Card className={cn("flex flex-col shadow-2xl md-surface md-elevation-2", compact ? "w-80 h-[calc(100vh-140px)] sticky top-24" : "w-full max-w-3xl h-[85vh]") }>
       <CardHeader className={compact ? "py-3" : undefined}>
-        <CardTitle className={cn("font-headline", compact ? "text-lg" : "text-3xl")}>Refine Goals</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className={cn("font-headline", compact ? "text-lg" : "text-3xl")}>Refine Goals</CardTitle>
+          <FormsPreviewDialog presentation={presentation as any} setPresentation={setPresentation as any}>
+            <Button size="sm" variant="outline">Review Fields</Button>
+          </FormsPreviewDialog>
+        </div>
         {!compact && (
           <CardDescription>
             I'm your presentation strategist. Answer my questions to help me understand your goals. You can also add more files.
@@ -216,12 +262,16 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
           </div>
         </ScrollArea>
         <div className="flex-shrink-0 pt-2 space-y-4">
-            {!compact && (
+            {/* File drop support in both compact and full modes */}
+            <div className={compact ? 'border border-dashed rounded p-2 text-xs text-muted-foreground' : ''}>
               <FileDropzone 
                 onFilesChange={setNewRawFiles}
                 acceptedFormats=".pdf, .docx, .md, .txt, .png, .jpg, .jpeg, .webp, .gif, .svg, .csv"
               />
-            )}
+              {compact ? (
+                <div className="mt-1 text-[11px] text-muted-foreground">Drop files here to add context</div>
+              ) : null}
+            </div>
             <div className="space-y-2">
                 <div className="flex justify-between text-sm font-medium text-muted-foreground">
                     <span>Context Meter</span>
