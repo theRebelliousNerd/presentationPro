@@ -53,6 +53,8 @@ const getInitialState = (id: string): {
     clarifiedGoals: '',
     outline: [],
     slides: [],
+    fullScript: '',
+    researchNotebook: [],
   },
 });
 

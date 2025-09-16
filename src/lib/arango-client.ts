@@ -64,6 +64,17 @@ interface PresentationState {
     updated_at: string;
   }>;
   design_spec?: { design_data?: any };
+  research_notes?: Array<{
+    presentation_id: string;
+    note_id?: string;
+    query?: string;
+    rules?: string[];
+    created_at?: string;
+    allow_domains?: string[];
+    top_k?: number;
+    model?: string;
+    extractions?: string[];
+  }>;
   script?: { script_content?: string };
 }
 
@@ -197,6 +208,21 @@ class ArangoClient {
       data: { presentation_id: presentation.id, slides: slidePayload },
     });
 
+    const researchNotes = (presentation.researchNotebook || []).map((note, index) => ({
+      note_id: note.id || `${presentation.id}:note:${index}`,
+      query: note.query,
+      rules: note.rules || [],
+      allow_domains: note.allowDomains || [],
+      top_k: typeof note.topK === 'number' ? note.topK : undefined,
+      model: note.model,
+      created_at: note.createdAt || new Date().toISOString(),
+      extractions: note.extractions || [],
+    }));
+    operations.push({
+      operation: 'save_research_notes',
+      data: { presentation_id: presentation.id, notes: researchNotes },
+    });
+
 
 
     // Persist clarified goals even when clearing them so Arango stays in sync
@@ -296,6 +322,21 @@ class ArangoClient {
 
     if (state.script && 'script_content' in state.script) {
       presentation.fullScript = state.script.script_content || '';
+    }
+
+    if (state.research_notes) {
+      presentation.researchNotebook = state.research_notes.map((note: any, index: number) => ({
+        id: note.note_id || `${presentation.id}:note:${index}`,
+        query: note.query || '',
+        rules: Array.isArray(note.rules) ? note.rules.filter(Boolean) : [],
+        createdAt: note.created_at || note.updated_at || new Date().toISOString(),
+        allowDomains: Array.isArray(note.allow_domains) ? note.allow_domains : undefined,
+        topK: typeof note.top_k === 'number' ? note.top_k : undefined,
+        model: note.model,
+        extractions: Array.isArray(note.extractions) ? note.extractions : undefined,
+      }));
+    } else if (!presentation.researchNotebook) {
+      presentation.researchNotebook = [];
     }
 
     return presentation;
@@ -505,6 +546,8 @@ export async function loadPresentation(presentationId: string): Promise<Presenta
         clarifiedGoals: '',
         outline: [],
         slides: [],
+        fullScript: '',
+        researchNotebook: [],
       };
 
       return arangoClient.arangoStateToPresentation(result.data, fallbackPresentation);
@@ -532,3 +575,19 @@ export async function loadPresentation(presentationId: string): Promise<Presenta
 }
 
 export default arangoClient;
+
+export async function fetchPresentationGraph(presentationId: string): Promise<{ slides: any[]; assets: any[]; edges: any[] }> {
+  const base = runtimeBaseUrl();
+  try {
+    const res = await fetch(`${base}/v1/arango/presentations/${encodeURIComponent(presentationId)}/graph`);
+    if (!res.ok) throw new Error('Graph fetch failed');
+    const js = await res.json() as any;
+    if (js && js.success && js.data) {
+      return js.data;
+    }
+  } catch (e) {
+    console.warn('Graph fetch failed', e);
+  }
+  return { slides: [], assets: [], edges: [] };
+}
+

@@ -142,6 +142,26 @@ class SlideContent:
             self.created_at = datetime.now(timezone.utc).isoformat()
         self.updated_at = datetime.now(timezone.utc).isoformat()
 
+@dataclass
+class ResearchNoteEntry:
+    presentation_id: str
+    note_id: str
+    query: str
+    rules: List[str]
+    allow_domains: Optional[List[str]] = None
+    top_k: Optional[int] = None
+    model: Optional[str] = None
+    extractions: Optional[List[str]] = None
+    created_at: str = None
+    updated_at: str = None
+
+    def __post_init__(self):
+        now = datetime.now(timezone.utc).isoformat()
+        if self.created_at is None:
+            self.created_at = now
+        self.updated_at = now
+
+
 class ConnectionPool:
     """Simple connection pool for ArangoDB clients"""
     
@@ -455,7 +475,64 @@ class EnhancedArangoClient:
         return {'count': len(inserted)}
 
 
-    # Design operations
+    async def replace_research_notes(self, presentation_id: str, notes: List[Dict[str, Any]]) -> Dict:
+        """Replace research notes for a presentation."""
+        self._ensure_simple_collection('research_notes')
+        self._db.aql.execute('FOR n IN research_notes FILTER n.presentation_id == @pid REMOVE n', bind_vars={'pid': presentation_id})
+        inserted: List[Dict[str, Any]] = []
+        for raw in notes or []:
+            note_id = raw.get('note_id') or raw.get('id')
+            if not note_id:
+                note_id = self._make_research_key(presentation_id, str(len(inserted)))
+            rules_value = raw.get('rules') or []
+            if isinstance(rules_value, str):
+                rules_list = [rules_value]
+            elif isinstance(rules_value, list):
+                rules_list = [str(r) for r in rules_value if r]
+            else:
+                rules_list = []
+            allow_value = raw.get('allow_domains') or []
+            if isinstance(allow_value, str):
+                allow_domains = [allow_value]
+            elif isinstance(allow_value, list):
+                allow_domains = [str(a) for a in allow_value if a]
+            else:
+                allow_domains = []
+            extractions_value = raw.get('extractions') or []
+            if isinstance(extractions_value, str):
+                extractions_list = [extractions_value]
+            elif isinstance(extractions_value, list):
+                extractions_list = [str(e) for e in extractions_value if e]
+            else:
+                extractions_list = []
+            entry = ResearchNoteEntry(
+                presentation_id=presentation_id,
+                note_id=note_id,
+                query=raw.get('query', ''),
+                rules=rules_list,
+                allow_domains=allow_domains if allow_domains else None,
+                top_k=raw.get('top_k'),
+                model=raw.get('model'),
+                extractions=extractions_list if extractions_list else None,
+                created_at=raw.get('created_at'),
+            )
+            doc = asdict(entry)
+            doc['_key'] = self._make_research_key(presentation_id, note_id)
+            self._collections['research_notes'].insert(doc, overwrite=True)
+            inserted.append(doc)
+        return {'count': len(inserted)}
+
+    async def get_research_notes(self, presentation_id: str) -> List[Dict]:
+        """Retrieve stored research notes for a presentation."""
+        self._ensure_simple_collection('research_notes')
+        cursor = self._db.aql.execute(
+            'FOR n IN research_notes FILTER n.presentation_id == @pid SORT n.created_at RETURN n',
+            bind_vars={'pid': presentation_id},
+        )
+        return list(cursor)
+
+
+# Design operations
     async def save_design_spec(self, presentation_id: str, design_data: Dict) -> Dict:
         """Save design specifications"""
         doc = {
@@ -533,6 +610,7 @@ class EnhancedArangoClient:
             'clarifications': await self.get_clarification_history(presentation_id),
             'outline': await self.get_outline(presentation_id),
             'slides': await self.get_latest_slides(presentation_id),
+            'research_notes': await self.get_research_notes(presentation_id),
         }
         
         # Get latest design spec
@@ -724,6 +802,12 @@ class EnhancedArangoClient:
         digest = hashlib.sha1(base.encode('utf-8', 'ignore')).hexdigest()[:16]
         prefix = ''.join(c for c in presentation_id if c.isalnum() or c in '-_') or 'asset'
         return f"{prefix}-{digest}"
+
+    def _make_research_key(self, presentation_id: str, note_id: str | None = None) -> str:
+        base = f"{presentation_id}:{note_id or ''}"
+        digest = hashlib.sha1(base.encode('utf-8', 'ignore')).hexdigest()[:16]
+        prefix = ''.join(c for c in presentation_id if c.isalnum() or c in '-_') or 'note'
+        return f"{prefix}-research-{digest}"
     # --- Project graph helpers ---
     def _ensure_simple_collection(self, name: str):
         try:

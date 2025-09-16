@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Slide } from '@/lib/types';
 import ImageDisplay from './ImageDisplay';
 import { rephraseNotes, critiqueSlide } from '@/lib/actions';
-import { Sparkles, Loader2, Wand2, Search } from 'lucide-react';
+import { Sparkles, Loader2, Wand2, Search, Crosshair } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { addUsage, estimateTokens } from '@/lib/token-meter';
 import { generateSlideContent } from '@/lib/actions';
@@ -100,6 +100,45 @@ export default function SlideEditor({ slide, updateSlide, assets = [], constrain
     <Card className="flex-grow flex flex-col lg:flex-row gap-3 p-3 overflow-hidden shadow-none rounded-none border-0">
       <div className="lg:w-1/2 h-full flex flex-col gap-4">
         <ImageDisplay slide={slide} updateSlide={updateSlide} />
+        {slide.designSpec?.placementCandidates && slide.designSpec.placementCandidates.length ? (
+          <div className="border rounded-md p-3 bg-muted/40">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <Crosshair className="h-4 w-4" /> Vision placement hints
+              </div>
+              {(() => {
+                const fw = Number(slide.designSpec?.placementFrame?.width);
+                const fh = Number(slide.designSpec?.placementFrame?.height);
+                if (Number.isFinite(fw) && Number.isFinite(fh)) {
+                  return (
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground/80">
+                      {Math.round(fw)}×{Math.round(fh)}
+                    </span>
+                  );
+                }
+                return null;
+              })()}
+            </div>
+            <div className="space-y-1.5">
+              {slide.designSpec.placementCandidates.slice(0, 4).map((candidate, idx) => (
+                <div key={idx} className="flex items-center justify-between text-xs bg-background/80 border rounded px-2 py-1">
+                  <span className="font-medium">Option {idx + 1}</span>
+                  <div className="flex items-center gap-3 text-muted-foreground">
+                    <span>Score {(Number(candidate?.score) || 0).toFixed(2)}</span>
+                    {(() => {
+                      const bw = Number(candidate?.bounding_box?.width);
+                      const bh = Number(candidate?.bounding_box?.height);
+                      if (Number.isFinite(bw) && Number.isFinite(bh)) {
+                        return <span>{Math.round(bw)}×{Math.round(bh)}</span>;
+                      }
+                      return null;
+                    })()}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <DesignPanel slide={slide} updateSlide={updateSlide} applyTokensToAll={applyTokensToAll} />
         <div className="flex items-center gap-3">
           <Switch id={`ai-image-${slide.id}`} checked={slide.useGeneratedImage ?? true} onCheckedChange={(v) => updateSlide(slide.id, { useGeneratedImage: v })} />

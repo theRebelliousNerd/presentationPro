@@ -7,6 +7,7 @@ and provide a simple interface for the orchestrator to use.
 """
 
 from typing import Dict, Any, Optional, List
+import json
 from pydantic import BaseModel, Field
 import json
 import logging
@@ -198,6 +199,10 @@ class OutlineInput(BaseModel):
     """Input schema for OutlineAgent."""
     clarifiedContent: str = Field(description="Clarified presentation goals")
     textModel: Optional[str] = Field(None, description="Model to use for this request")
+    audience: Optional[str] = Field(None, description="Target audience descriptor")
+    tone: Optional[Any] = Field(None, description="Tone preferences or sliders")
+    length: Optional[str] = Field(None, description="Desired outline length")
+    template: Optional[str] = Field(None, description="Template preference")
 
 
 class OutlineAgent(BaseAgentWrapper):
@@ -225,9 +230,27 @@ class OutlineAgent(BaseAgentWrapper):
 
         prompt_parts = [
             system_prompt,
-            f"\nClarified presentation goals:\n{data.clarifiedContent}",
-            "\nGenerate an appropriate outline with slide titles."
+            f"\nClarified presentation goals:\n{data.clarifiedContent}"
         ]
+        if data.audience:
+            prompt_parts.append(f"\nTarget audience: {data.audience}")
+        if data.length:
+            prompt_parts.append(f"\nDesired deck length: {data.length}")
+        if data.template:
+            prompt_parts.append(f"\nTemplate preference: {data.template}")
+        if data.tone is not None:
+            tone_value = data.tone
+            if isinstance(tone_value, dict):
+                formality = tone_value.get('formality')
+                energy = tone_value.get('energy')
+                if formality is not None and energy is not None:
+                    tone_label = f"formality {formality}, energy {energy}"
+                else:
+                    tone_label = json.dumps(tone_value)
+            else:
+                tone_label = str(tone_value)
+            prompt_parts.append(f"\nTone guidance: {tone_label}")
+        prompt_parts.append("\nGenerate an appropriate outline with slide titles.")
 
         text, usage = self.llm(prompt_parts)
 
@@ -655,9 +678,16 @@ class DesignAgent(BaseAgentWrapper):
                     body = { 'screenshotDataUrl': data.screenshotDataUrl or data.slide.get('screenshotDataUrl') }
                     with httpx.Client(timeout=8.0) as client:
                         r = client.post(url, json=body)
-                        if r.status_code == 200:
-                            placement = r.json()
-                            output_data['designSpec']['placementCandidates'] = placement.get('candidates', [])
+                    if r.status_code == 200:
+                        placement = r.json()
+                        candidates = placement.get('candidates', []) or []
+                        if candidates:
+                            output_data.setdefault('designSpec', {})
+                            output_data['designSpec']['placementCandidates'] = candidates
+                            width = placement.get('width')
+                            height = placement.get('height')
+                            if isinstance(width, (int, float)) and isinstance(height, (int, float)):
+                                output_data['designSpec']['placementFrame'] = { 'width': float(width), 'height': float(height) }
             except Exception:
                 pass
         else:
@@ -695,35 +725,19 @@ class ScriptWriterAgent(BaseAgentWrapper):
             self.set_model(data.textModel)
 
         system_prompt = (
-            "You are a ScriptWriter agent that creates presentation scripts.
-
-"
-            "Your task is to write a cohesive script for the entire presentation that references slide content and relevant supporting assets.
-
-"
-            "Requirements:
-"
-            "- Create smooth transitions between slides
-"
-            "- Maintain consistent tone throughout
-"
-            "- Call out when to reference provided assets (cite the asset name)
-"
-            "- Include timing cues and emphasis points
-"
-            "- Make it conversational and engaging
-
-"
-            "Output Format:
-"
-            "Return a JSON object with:
-"
-            "{
-"
-            '  "script": "Complete presentation script..."
-'
-            "}
-"
+            "You are a ScriptWriter agent that creates presentation scripts.\n\n"
+            "Your task is to write a cohesive script for the entire presentation that references slide content and relevant supporting assets.\n\n"
+            "Requirements:\n"
+            "- Create smooth transitions between slides\n"
+            "- Maintain consistent tone throughout\n"
+            "- Call out when to reference provided assets (cite the asset name)\n"
+            "- Include timing cues and emphasis points\n"
+            "- Make it conversational and engaging\n\n"
+            "Output Format:\n"
+            "Return a JSON object with:\n"
+            "{\n"
+            '  "script": "Complete presentation script..."\n'
+            "}\n"
         )
 
         slide_blocks = []
@@ -796,6 +810,7 @@ class ResearchInput(BaseModel):
     imageDataUrl: Optional[str] = None
     chartImageDataUrl: Optional[str] = None
     chartType: Optional[str] = None
+    presentationId: Optional[str] = None
 
 
 class ResearchAgent(BaseAgentWrapper):

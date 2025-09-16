@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { ImageIcon, Loader2, RefreshCw, Edit, Palette } from 'lucide-react';
+import { ImageIcon, Loader2, RefreshCw, Edit, Palette, Crosshair } from 'lucide-react';
 import { Slide } from '@/lib/types';
 import { craftImagePrompt, generateImage, saveImageDataUrl } from '@/lib/actions';
 import ImageEditorModal from './ImageEditorModal';
@@ -22,6 +22,7 @@ export default function ImageDisplay({ slide, updateSlide }: ImageDisplayProps) 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDesigning, setIsDesigning] = useState(false);
   const [overlay, setOverlay] = useState(0);
+  const [showPlacement, setShowPlacement] = useState(false);
   const containerRef = useState<React.RefObject<HTMLDivElement>>()[0] || ((): React.RefObject<HTMLDivElement> => {
     // create a stable ref without re-renders
     const r = { current: null as any } as React.RefObject<HTMLDivElement>;
@@ -129,6 +130,17 @@ export default function ImageDisplay({ slide, updateSlide }: ImageDisplayProps) 
     }
   };
 
+  const placementCandidates = (slide.designSpec?.placementCandidates || []) as any[];
+  const placementFrame = slide.designSpec?.placementFrame || { width: 1280, height: 720 };
+  const baseWidth = Math.max(1, Number(placementFrame?.width) || 1280);
+  const baseHeight = Math.max(1, Number(placementFrame?.height) || 720);
+
+  useEffect(() => {
+    if (!placementCandidates.length) {
+      setShowPlacement(false);
+    }
+  }, [slide.id, placementCandidates.length]);
+
   return (
     <div ref={containerRef as any} className="aspect-video w-full bg-muted rounded-lg flex items-center justify-center relative overflow-hidden group">
       {slide.imageState === 'loading' && (
@@ -183,6 +195,31 @@ export default function ImageDisplay({ slide, updateSlide }: ImageDisplayProps) 
         <div className="absolute inset-0" style={{ backgroundColor: `rgba(0,0,0,${overlay})` }} />
       )}
 
+      {showPlacement && placementCandidates.length ? (
+        <div className="absolute inset-0 pointer-events-none">
+          {placementCandidates.slice(0, 4).map((candidate, idx) => {
+            const bb = candidate?.bounding_box || {};
+            const left = Math.max(0, Math.min(100, ((Number(bb.x) || 0) / baseWidth) * 100));
+            const top = Math.max(0, Math.min(100, ((Number(bb.y) || 0) / baseHeight) * 100));
+            const width = Math.max(0, Math.min(100, ((Number(bb.width) || 0) / baseWidth) * 100));
+            const height = Math.max(0, Math.min(100, ((Number(bb.height) || 0) / baseHeight) * 100));
+            const numericScore = Number(candidate?.score);
+            const score = Number.isFinite(numericScore) ? numericScore : 0;
+            return (
+              <div
+                key={idx}
+                className="absolute border-2 border-sky-400/80 rounded-md bg-sky-500/10"
+                style={{ left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%` }}
+              >
+                <div className="absolute -top-5 left-0 text-[10px] font-semibold uppercase tracking-wide text-sky-100 bg-slate-900/90 px-1.5 py-0.5 rounded">
+                  #{idx + 1} • {score.toFixed(2)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
       {/* Text overlay preview (hide when layout html exists) */}
       {!slide.designSpec?.layout?.html && (
         <div className="absolute inset-0 p-6 md:p-8 flex flex-col justify-center">
@@ -204,6 +241,16 @@ export default function ImageDisplay({ slide, updateSlide }: ImageDisplayProps) 
           {isDesigning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Palette className="mr-2 h-4 w-4" />}
           Design Boost
         </Button>
+        {placementCandidates.length ? (
+          <Button
+            variant={showPlacement ? 'default' : 'secondary'}
+            onClick={() => setShowPlacement(prev => !prev)}
+            disabled={slide.imageState === 'loading'}
+          >
+            <Crosshair className="mr-2 h-4 w-4" />
+            {showPlacement ? 'Hide Guides' : 'Show Guides'}
+          </Button>
+        ) : null}
         <Button variant="secondary" onClick={() => setIsModalOpen(true)} disabled={!slide.useGeneratedImage}>
           <Edit className="mr-2 h-4 w-4" />
           Edit

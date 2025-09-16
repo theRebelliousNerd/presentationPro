@@ -272,6 +272,14 @@ async def batch_operations(request: BatchRequest):
                     )
                     results.append({"operation": "save_goals", "result": {'ok': True, 'clarified_goals': goals_text}})
 
+                elif operation.operation == "save_research_notes":
+                    data = operation.data
+                    await client.replace_research_notes(
+                        presentation_id=data["presentation_id"],
+                        notes=data.get('notes', [])
+                    )
+                    results.append({"operation": "save_research_notes", "result": {'ok': True, 'count': len(data.get('notes', []) )}})
+
                 elif operation.operation == "save_script":
                     data = operation.data
                     await client.save_script(

@@ -4,17 +4,20 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription }
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getPresentationOutline } from '@/lib/actions';
+import type { Presentation } from '@/lib/types';
 import { addUsage, estimateTokens } from '@/lib/token-meter';
 import { Check, ArrowLeft, ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 
 type OutlineApprovalProps = {
   clarifiedGoals: string;
+  initialInput?: Presentation['initialInput'];
+  presentationId?: string;
   onApprove: (outline: string[]) => void;
   onGoBack: () => void;
 };
 
-export default function OutlineApproval({ clarifiedGoals, onApprove, onGoBack }: OutlineApprovalProps) {
+export default function OutlineApproval({ clarifiedGoals, initialInput, presentationId, onApprove, onGoBack }: OutlineApprovalProps) {
   const [outline, setOutline] = useState<string[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +28,13 @@ export default function OutlineApproval({ clarifiedGoals, onApprove, onGoBack }:
         if (clarifiedGoals) {
           addUsage({ model: 'gemini-2.5-flash', kind: 'prompt', tokens: estimateTokens(clarifiedGoals), at: Date.now() } as any);
         }
-        const response = await getPresentationOutline(clarifiedGoals);
+        const response = await getPresentationOutline(clarifiedGoals, {
+          presentationId,
+          length: initialInput?.length,
+          audience: initialInput?.audience,
+          tone: initialInput?.tone,
+          template: initialInput?.template,
+        });
         setOutline(response.slideTitles);
         const usage = (response as any)._usage;
         if (usage && usage.completionTokens) {
@@ -42,7 +51,7 @@ export default function OutlineApproval({ clarifiedGoals, onApprove, onGoBack }:
       }
     };
     fetchOutline();
-  }, [clarifiedGoals]);
+  }, [clarifiedGoals, initialInput, presentationId]);
 
   return (
     <Card className="w-full max-w-2xl shadow-2xl">

@@ -23,9 +23,9 @@ function decodeModels(raw?: string | null): AgentModels | null {
   }
 }
 
-export function getServerAgentModels(): AgentModels {
+export async function getServerAgentModels(): Promise<AgentModels> {
   try {
-    const store = cookies();
+    const store = await cookies();
     const entry = store.get(AGENT_MODELS_COOKIE);
     const parsed = decodeModels(entry?.value);
     if (parsed) return parsed;
@@ -33,10 +33,10 @@ export function getServerAgentModels(): AgentModels {
   return DEFAULT_AGENT_MODELS;
 }
 
-export function serializeAgentModels(models: AgentModels): string {
+export async function serializeAgentModels(models: AgentModels): Promise<string> {
   return Buffer.from(JSON.stringify(models), 'utf-8').toString('base64');
 }
 
-export function deserializeAgentModels(raw: string | null | undefined): AgentModels | null {
+export async function deserializeAgentModels(raw: string | null | undefined): Promise<AgentModels | null> {
   return decodeModels(raw);
 }

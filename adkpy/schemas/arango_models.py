@@ -10,7 +10,7 @@ Note: These are not wired into the ingest/retrieve paths yet; they
 exist to establish the contract and enable future validation.
 """
 
-from typing import Literal, Optional
+from typing import Literal, Optional, List
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 
@@ -54,12 +54,15 @@ class ChunkDoc(ArangoBase):
     - docKey: documents/_key to which this chunk belongs (not prefixed with collection)
     - name: asset file name
     - text: chunk content (trimmed)
+    - url: optional pointer back to the source asset for UI linking
     """
 
     presentationId: str
     docKey: str
     name: str
     text: str
+    url: Optional[str] = None
+    embedding: Optional[List[float]] = None
 
     @field_validator("text")
     @classmethod

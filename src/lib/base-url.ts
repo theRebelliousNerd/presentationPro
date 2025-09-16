@@ -5,7 +5,7 @@ function normalize(url?: string | null): string | undefined {
   if (!url) return undefined;
   const trimmed = url.trim();
   if (!/^https?:\/\//i.test(trimmed)) return undefined;
-  return trimmed.replace(/\/+$, '');
+  return trimmed.replace(/\/+$/, '');
 }
 
 function isLocalhostHost(hostname: string): boolean {

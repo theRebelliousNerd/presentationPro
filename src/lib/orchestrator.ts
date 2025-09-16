@@ -41,7 +41,7 @@ export async function orchScript(input: any): Promise<{ script: string }> { retu
 export async function orchIngest(input: any): Promise<{ ok: boolean }> { return postJSON('/v1/ingest', input); }
 export async function orchRetrieve(input: any): Promise<{ chunks: { name: string; text: string; url?: string }[] }> { return postJSON('/v1/retrieve', input); }
 export async function orchVisionAnalyze(input: { screenshotDataUrl: string }): Promise<{ mean: number; variance: number; recommendDarken: boolean; overlay: number }> { return postJSON('/v1/vision/analyze', input); }
-export async function orchResearchBackgrounds(input: { textModel?: string; query?: string; topK?: number; allowDomains?: string[] }): Promise<{ rules: string[]; usage?: any }> { return postJSON('/v1/research/backgrounds', input); }
+export async function orchResearchBackgrounds(input: { textModel?: string; query?: string; topK?: number; allowDomains?: string[]; presentationId?: string }): Promise<{ rules: string[]; usage?: any; extractions?: any }> { return postJSON('/v1/research/backgrounds', input); }
 
 export async function orchSearchCacheConfig(input: { enabled?: boolean; cacheTtl?: number }): Promise<{ enabled: boolean; cacheTtl: number }> { return postJSON('/v1/search/cache/config', input); }
 export async function orchSearchCacheClear(input: { deleteFile?: boolean; path?: string } = {}): Promise<{ ok: boolean }> { return postJSON('/v1/search/cache/clear', input); }

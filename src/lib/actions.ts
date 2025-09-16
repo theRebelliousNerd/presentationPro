@@ -37,19 +37,19 @@ export type GenerateSlideContentOutput = {
   imagePrompt: string;
 }[]
 
-function currentAgentModels(): AgentModels {
-  return getServerAgentModels();
+async function currentAgentModels(): Promise<AgentModels> {
+  return await getServerAgentModels();
 }
 
-function attachAgentModel<K extends keyof AgentModels>(agent: K, payload: any) {
-  const models = currentAgentModels();
+async function attachAgentModel<K extends keyof AgentModels>(agent: K, payload: any) {
+  const models = await currentAgentModels();
   const model = models[agent] || models.clarifier;
   if (payload && payload.textModel) return payload;
   return { ...payload, textModel: model };
 }
 
-function attachSlideModels(payload: any) {
-  const models = currentAgentModels();
+async function attachSlideModels(payload: any) {
+  const models = await currentAgentModels();
   return {
     ...payload,
     writerModel: payload?.writerModel || models.slideWriter,
@@ -63,7 +63,7 @@ export async function getClarification(
   newFiles: UploadedFileRef[] = [],
   presentationId?: string,
 ): Promise<RefinePresentationGoalsOutput> {
-  const result: any = await orchClarify(attachAgentModel('clarifier', { history, initialInput, newFiles, presentationId }));
+  const result: any = await orchClarify(await attachAgentModel('clarifier', { history, initialInput, newFiles, presentationId }));
   // Map orchestrator response and pass through structured patches/usage when present
   return {
     clarifiedGoals: result.refinedGoals,
@@ -76,13 +76,22 @@ export async function getClarification(
   } as RefinePresentationGoalsOutput;
 }
 
-export async function getPresentationOutline(clarifiedGoals: string): Promise<{ slideTitles: string[] }> {
-  const res = await orchOutline(attachAgentModel('outline', { clarifiedContent: clarifiedGoals }));
+export async function getPresentationOutline(clarifiedGoals: string, opts: { presentationId?: string; length?: string; audience?: string; tone?: Presentation['initialInput']['tone']; template?: string } = {}): Promise<{ slideTitles: string[] }> {
+  const tonePayload = opts.tone ? { formality: opts.tone.formality, energy: opts.tone.energy } : undefined;
+  const payload = {
+    clarifiedContent: clarifiedGoals,
+    presentationId: opts.presentationId,
+    length: opts.length,
+    audience: opts.audience,
+    tone: tonePayload,
+    template: opts.template,
+  };
+  const res = await orchOutline(await attachAgentModel('outline', payload));
   return { slideTitles: res.outline, _usage: (res as any).usage } as any;
 }
 
 export async function generateSlideContent(input: GenerateSlideContentInput): Promise<GenerateSlideContentOutput> {
-  const out = await orchWriteSlide(attachSlideModels(input));
+  const out = await orchWriteSlide(await attachSlideModels(input));
   return out.slides || [];
 }
 

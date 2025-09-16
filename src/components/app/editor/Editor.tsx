@@ -138,6 +138,8 @@ export default function Editor({ slides, setSlides, presentation, setPresentatio
           addSlide={addSlide}
           deleteSlide={deleteSlide}
           setSlides={setSlides}
+          presentation={presentation}
+          setPresentation={setPresentation}
         />
       ) : null}
       {!sidebarCollapsed ? (

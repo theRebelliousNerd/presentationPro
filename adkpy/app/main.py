@@ -10,9 +10,12 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Any, Dict
+import asyncio
 import httpx
 import logging
 import os
+import uuid
+from datetime import datetime
 
 # Import agent wrapper classes and their data models
 from agents.wrappers import (
@@ -262,6 +265,17 @@ async def write_slide(data: SlideWriterInput, request: Request):
     except Exception:
         pass
     result = slide_writer_agent.run(data)
+    try:
+        if pid:
+            from agents.base_arango_client import EnhancedArangoClient
+            client = EnhancedArangoClient(agent_name="slide_writer")
+            await client.connect()
+            titles = '; '.join([ (s.get('title') or '') for s in (result.data or []) ][:3])
+            snippet = titles or '[no slides returned]'
+            await client.save_message(pid, 'slide_writer', 'assistant', snippet, 'llm', {'endpoint':'/v1/slide/write'})
+            await client.close()
+    except Exception:
+        pass
     # result.data is already a list of slides
     return {"slides": result.data, "usage": result.usage.model_dump()}
 
@@ -358,11 +372,32 @@ async def critique_slide(data: CriticInput, request: Request):
     return {"slide": slide_out, "review": review, "usage": result.usage.model_dump()}
 
 
+VISION_TOOL_MAP: Dict[str, str] = {
+    '/v1/visioncv/blur': 'critic.assess_blur',
+    '/v1/vision/analyze': 'critic.color_contrast',
+}
+
 async def _visioncv_call_http(path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-    base = os.environ.get('ADK_BASE_URL', 'http://localhost:8088')
-    url = (base or '').rstrip('/') + path
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        r = await client.post(url, json=payload)
+    vision_url = os.environ.get('VISIONCV_URL')
+    tool_name = VISION_TOOL_MAP.get(path)
+    if vision_url and tool_name:
+        try:
+            from shared.visioncv_client import call_tool as _vc_call
+            args = dict(payload)
+            result = await asyncio.to_thread(_vc_call, tool_name, args)
+            if isinstance(result, dict):
+                return result
+        except Exception as exc:
+            logger.warning(f"VisionCV MCP call failed for {tool_name}: {exc}")
+    base = os.environ.get('ADK_BASE_URL')
+    if base:
+        base_url = base.rstrip('/')
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.post(f"{base_url}{path}", json=payload)
+            r.raise_for_status()
+            return r.json()
+    async with httpx.AsyncClient(app=app, base_url='http://vision-proxy.local', timeout=10.0) as client:
+        r = await client.post(path, json=payload)
         r.raise_for_status()
         return r.json()
 
@@ -386,6 +421,16 @@ async def polish_notes(data: NotesPolisherInput, request: Request):
     except Exception:
         pass
     result = notes_polisher_agent.run(data)
+    try:
+        if pid:
+            from agents.base_arango_client import EnhancedArangoClient
+            client = EnhancedArangoClient(agent_name="notes_polisher")
+            await client.connect()
+            preview = (result.data.get('rephrasedSpeakerNotes') or '')[:280]
+            await client.save_message(pid, 'notes_polisher', 'assistant', preview, 'llm', {'endpoint':'/v1/slide/polish_notes'})
+            await client.close()
+    except Exception:
+        pass
     return {"rephrasedSpeakerNotes": result.data['rephrasedSpeakerNotes'], "usage": result.usage.model_dump()}
 
 @app.post("/v1/slide/design")
@@ -448,7 +493,17 @@ async def generate_script(data: ScriptWriterInput, request: Request):
     except Exception:
         pass
     result = script_writer_agent.run(data)
-    return {"script": result.data['script'], "usage": result.usage.model_dump()}
+    script = result.data.get('script', '')
+    try:
+        if pid:
+            from agents.base_arango_client import EnhancedArangoClient
+            client = EnhancedArangoClient(agent_name="script_writer")
+            await client.connect()
+            await client.save_message(pid, 'script_writer', 'assistant', (script or '')[:280], 'llm', {'endpoint':'/v1/script/generate'})
+            await client.close()
+    except Exception:
+        pass
+    return {"script": script, "usage": result.usage.model_dump()}
 
 
 # --- Tool and Utility Endpoints ---
@@ -471,6 +526,53 @@ async def research_backgrounds(data: ResearchInput, request: Request):
     try:
         if isinstance(result.data, dict) and result.data.get('extractions'):
             out['extractions'] = result.data.get('extractions')
+    except Exception:
+        pass
+    try:
+        if pid:
+            from agents.base_arango_client import EnhancedArangoClient
+            client = EnhancedArangoClient(agent_name="research")
+            await client.connect()
+            preview = '\n'.join((out.get('rules') or [])[:5])
+            await client.save_message(pid, 'research', 'assistant', preview or '[no rules]', 'llm', {'endpoint':'/v1/research/backgrounds'})
+            try:
+                existing = await client.get_research_notes(pid)
+                new_note = {
+                    'note_id': f"note-{uuid.uuid4().hex[:8]}",
+                    'query': data.query or '',
+                    'rules': out.get('rules') or [],
+                    'allow_domains': data.allowDomains,
+                    'top_k': data.topK,
+                    'model': data.textModel,
+                    'created_at': datetime.utcnow().isoformat(),
+                    'extractions': out.get('extractions'),
+                }
+                already = False
+                for row in existing:
+                    try:
+                        if (row.get('query') or '') == new_note['query'] and (row.get('rules') or []) == new_note['rules']:
+                            already = True
+                            break
+                    except Exception:
+                        continue
+                if not already:
+                    payload = []
+                    for row in existing:
+                        payload.append({
+                            'note_id': row.get('note_id') or row.get('_key'),
+                            'query': row.get('query'),
+                            'rules': row.get('rules') or [],
+                            'allow_domains': row.get('allow_domains') or [],
+                            'top_k': row.get('top_k'),
+                            'model': row.get('model'),
+                            'created_at': row.get('created_at'),
+                            'extractions': row.get('extractions'),
+                        })
+                    payload.append(new_note)
+                    await client.replace_research_notes(pid, payload)
+            except Exception as store_err:
+                logger.warning(f"Failed to persist research note for {pid}: {store_err}")
+            await client.close()
     except Exception:
         pass
     return out

@@ -4,8 +4,10 @@ ENV PYTHONDONTWRITEBYTECODE=1     PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
+RUN pip install uv
+
 COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN uv pip install --system --no-cache-dir -r requirements.txt
 
 # Copy entire ADK package (app, agents, tools, a2a, schemas)
 COPY . /app

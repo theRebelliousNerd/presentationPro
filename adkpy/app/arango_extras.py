@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, Any, Dict
 from app.arango_routes import get_arango_client, ArangoResponse
 from datetime import datetime
@@ -41,6 +41,13 @@ async def set_template(presentation_id: str, body: TemplateSet):
 class SlideUseAsset(BaseModel):
     url: str
 
+
+
+class GraphResponse(BaseModel):
+    slides: list[dict[str, Any]] = Field(default_factory=list)
+    assets: list[dict[str, Any]] = Field(default_factory=list)
+    edges: list[dict[str, Any]] = Field(default_factory=list)
+
 @router.post("/presentations/{presentation_id}/slides/{slide_index}/use-asset", response_model=ArangoResponse)
 async def slide_use_asset(presentation_id: str, slide_index: int, body: SlideUseAsset):
     client = await get_arango_client()
@@ -70,3 +77,28 @@ async def slide_use_asset(presentation_id: str, slide_index: int, body: SlideUse
         'created_at': datetime.now().isoformat(),
     })
     return ArangoResponse(success=True, data={'from': slide.get('_id'), 'to': asset.get('_id')})
+
+@router.get("/presentations/{presentation_id}/graph", response_model=ArangoResponse)
+async def get_presentation_graph(presentation_id: str) -> ArangoResponse:
+    client = await get_arango_client()
+    if not client:
+        return ArangoResponse(success=False, error="ArangoDB not available")
+    try:
+        slides = await client.get_latest_slides(presentation_id) or []
+    except Exception:
+        slides = []
+    db = client._db  # type: ignore
+    assets = []
+    try:
+        cursor = db.aql.execute('FOR a IN assets FILTER a.presentation_id == @pid RETURN { id: a._id, key: a._key, name: a.name, url: a.url, kind: a.category || a.kind }', bind_vars={'pid': presentation_id})
+        assets = list(cursor)
+    except Exception:
+        pass
+    edges = []
+    try:
+        if db.has_collection('content_edges'):
+            cursor = db.aql.execute('FOR e IN content_edges FILTER e.presentation_id == @pid RETURN e', bind_vars={'pid': presentation_id})
+            edges = list(cursor)
+    except Exception:
+        pass
+    return ArangoResponse(success=True, data={'slides': slides, 'assets': assets, 'edges': edges})

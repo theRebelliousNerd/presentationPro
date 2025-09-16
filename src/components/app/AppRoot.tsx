@@ -48,62 +48,104 @@ export default function AppRoot({ presentationIdOverride }: { presentationIdOver
   };
 
   const handleOutlineApproved = async (outline: string[]) => {
-    setPresentation(prev => ({...prev, outline}));
+    const total = outline.length;
+    if (total === 0) {
+      setAppState('editing');
+      return;
+    }
+    setPresentation(prev => ({ ...prev, outline, slides: [] }));
     setAppState('generating');
     cancelGenerationRef.current = false;
-    setGenProgress({ current: 0, total: outline.length });
-    try {
-      const generated: Slide[] = [];
-      // Build assets list from uploaded files to inform AI generation
-      const allFiles = [...(presentation.initialInput.files || []), ...(presentation.initialInput.styleFiles || [])];
-      const assets = allFiles.map(f => ({
-        name: f.name,
-        url: f.url,
-        kind: f.kind || (/(png|jpg|jpeg|gif|webp|svg)$/i.test(f.name) ? 'image' : /(pdf|docx|md|txt|csv|xls|xlsx)$/i.test(f.name) ? 'document' : 'other'),
+    setGenProgress({ current: 0, total });
+
+    const basePresentation = presentation;
+    const allFiles = [...(basePresentation.initialInput.files || []), ...(basePresentation.initialInput.styleFiles || [])];
+    const baseAssets = allFiles.map(f => ({
+      name: f.name,
+      url: f.url,
+      kind: f.kind || (/(png|jpg|jpeg|gif|webp|svg)$/i.test(f.name) ? 'image' : /(pdf|docx|md|txt|csv|xls|xlsx)$/i.test(f.name) ? 'document' : 'other'),
+    }));
+
+    const slidesBuffer: (Slide | undefined)[] = new Array(total);
+    let completed = 0;
+
+    const updateSlidesState = () => {
+      setPresentation(prev => ({
+        ...prev,
+        slides: slidesBuffer.filter((s): s is Slide => Boolean(s)),
       }));
-      for (let i = 0; i < outline.length; i++) {
-        if (cancelGenerationRef.current) break;
-        const title = outline[i];
-        // Pull top context chunks from orchestrator graph RAG (if enabled)
-        let contextAssets = assets;
-        try {
-          const chunks = await retrieveContext(presentation.id, title, 5);
-          if (chunks.length) {
-            contextAssets = [
-              ...assets,
-              ...chunks.map((c) => ({ name: c.name, url: '', kind: 'document' as const, text: c.text } as any)),
-            ];
-          }
-        } catch {}
-        const [rawSlide] = await generateSlideContent({ outline: [title], assets: contextAssets });
-        // Critique + revise pass
-        const improved = await critiqueSlide({ title: (rawSlide as any).title, content: (rawSlide as any).content, speakerNotes: (rawSlide as any).speakerNotes, imagePrompt: (rawSlide as any).imagePrompt }, {
-          audience: presentation.initialInput.audience,
-          tone: `formality:${presentation.initialInput.tone.formality}/energy:${presentation.initialInput.tone.energy}`,
-          length: presentation.initialInput.length as any,
-          assets: allFiles as any,
-          presentationId: presentation.id,
-          slideIndex: i,
-        });
-        const useAsset = (rawSlide as any).useAssetImageUrl || (rawSlide as any).assetImageUrl;
-        const withId: Slide = {
-          title: improved.title,
-          content: improved.content,
-          speakerNotes: improved.speakerNotes,
-          imagePrompt: (rawSlide as any).imagePrompt,
-          id: nanoid(),
-          imageState: 'done',
-          assetImageUrl: useAsset || undefined,
-          useGeneratedImage: false,
-          imageUrl: useAsset || undefined,
-        } as Slide;
-        generated.push(withId);
-        setPresentation(prev => ({ ...prev, slides: [...generated] }));
-        setGenProgress({ current: i + 1, total: outline.length });
-      }
+    };
+
+    const generateSlideAt = async (index: number) => {
+      if (cancelGenerationRef.current) return;
+      const title = outline[index];
+      let contextAssets = baseAssets;
+      try {
+        const chunks = await retrieveContext(basePresentation.id, title, 5);
+        if (chunks.length) {
+          contextAssets = [
+            ...baseAssets,
+            ...chunks.map((c) => ({ name: c.name, url: '', kind: 'document' as const, text: c.text } as any)),
+          ];
+        }
+      } catch {}
+
+      if (cancelGenerationRef.current) return;
+
+      const [rawSlide] = await generateSlideContent({ outline: [title], assets: contextAssets });
+      if (cancelGenerationRef.current) return;
+
+      const improved = await critiqueSlide({
+        title: (rawSlide as any).title,
+        content: (rawSlide as any).content,
+        speakerNotes: (rawSlide as any).speakerNotes,
+        imagePrompt: (rawSlide as any).imagePrompt,
+      }, {
+        audience: basePresentation.initialInput.audience,
+        tone: `formality:${basePresentation.initialInput.tone.formality}/energy:${basePresentation.initialInput.tone.energy}`,
+        length: basePresentation.initialInput.length as any,
+        assets: allFiles as any,
+        presentationId: basePresentation.id,
+        slideIndex: index,
+      });
+
+      if (cancelGenerationRef.current) return;
+
+      const useAsset = (rawSlide as any).useAssetImageUrl || (rawSlide as any).assetImageUrl;
+      slidesBuffer[index] = {
+        title: improved.title,
+        content: improved.content,
+        speakerNotes: improved.speakerNotes,
+        imagePrompt: (rawSlide as any).imagePrompt,
+        id: nanoid(),
+        imageState: 'done',
+        assetImageUrl: useAsset || undefined,
+        useGeneratedImage: false,
+        imageUrl: useAsset || undefined,
+      } as Slide;
+
+      updateSlidesState();
+      completed += 1;
+      setGenProgress({ current: completed, total });
+    };
+
+    try {
+      const concurrency = Math.min(3, total || 1);
+      let nextIndex = 0;
+
+      const runNext = async (): Promise<void> => {
+        if (cancelGenerationRef.current) return;
+        const currentIndex = nextIndex++;
+        if (currentIndex >= total) return;
+        await generateSlideAt(currentIndex);
+        await runNext();
+      };
+
+      await Promise.all(new Array(Math.min(concurrency, total || 1)).fill(null).map(() => runNext()));
+
       setAppState('editing');
     } catch (error) {
-      console.error("Failed to generate slides:", error);
+      console.error('Failed to generate slides:', error);
       setAppState('error');
     }
   };

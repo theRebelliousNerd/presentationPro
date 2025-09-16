@@ -44,6 +44,14 @@ export type Slide = {
     variantId?: string;
     rationale?: string;
     score?: number;
+    placementCandidates?: Array<{
+      bounding_box?: { x?: number; y?: number; width?: number; height?: number };
+      score?: number;
+      mean_saliency?: number;
+      thirds_distance?: number;
+      area?: number;
+    }>;
+    placementFrame?: { width: number; height: number };
   };
   criticReview?: { issues: string[]; suggestions: string[] };
   // Per-slide constraint overrides
@@ -63,6 +71,17 @@ export type UploadedFileRef = {
   /** Optional storage path for internal reference */
   path?: string;
   kind?: 'image' | 'document' | 'other';
+};
+
+export type ResearchNote = {
+  id: string;
+  query: string;
+  rules: string[];
+  createdAt: string;
+  allowDomains?: string[];
+  topK?: number;
+  model?: string;
+  extractions?: string[];
 };
 
 export type Presentation = {
@@ -111,6 +130,7 @@ export type Presentation = {
   outline: string[];
   slides: Slide[];
   fullScript?: string;
+  researchNotebook?: ResearchNote[];
   theme?: 'brand' | 'muted' | 'dark';
 };
 

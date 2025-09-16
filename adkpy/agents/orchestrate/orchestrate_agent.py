@@ -1,145 +1,145 @@
-"""
-Simplified orchestrate agent for PresentationPro using ADK's RemoteA2aAgent.
-This coordinates all presentation agents via A2A protocol.
-"""
 
-import os
+# Orchestrator service that coordinates presentation agents through the API gateway.
+
+import asyncio
 import json
 import logging
-from typing import Dict, Any, List, Optional
-from dotenv import load_dotenv
+import os
+from typing import Any, Dict, List
 
-from google.adk import Agent
-from google.adk.agents.remote_a2a_agent import RemoteA2aAgent
-from google.genai import types
+import httpx
+from dotenv import load_dotenv
 
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
+
 class PresentationOrchestrator:
-    """Orchestrates presentation creation workflow using remote A2A agents."""
+    """Coordinate the presentation workflow by calling the FastAPI gateway."""
 
-    def __init__(self):
-        self.agent_urls = {
-            "clarifier": os.environ.get("CLARIFIER_URL", "http://clarifier:10001"),
-            "outline": os.environ.get("OUTLINE_URL", "http://outline:10002"),
-            "slide_writer": os.environ.get("SLIDE_WRITER_URL", "http://slide-writer:10003"),
-            "critic": os.environ.get("CRITIC_URL", "http://critic:10004"),
-            "notes_polisher": os.environ.get("NOTES_POLISHER_URL", "http://notes-polisher:10005"),
-            "design": os.environ.get("DESIGN_URL", "http://design:10006"),
-            "script_writer": os.environ.get("SCRIPT_WRITER_URL", "http://script-writer:10007"),
-            "research": os.environ.get("RESEARCH_URL", "http://research:10008")
-        }
-
-        # Create RemoteA2aAgent instances for each service
-        self.remote_agents = {}
-        for name, url in self.agent_urls.items():
-            try:
-                self.remote_agents[name] = RemoteA2aAgent(
-                    name=f"{name}_remote",
-                    url=url,
-                    description=f"Remote {name} agent for presentation creation"
-                )
-                log.info(f"Connected to {name} agent at {url}")
-            except Exception as e:
-                log.error(f"Failed to connect to {name} at {url}: {e}")
-
-    def create_agent(self) -> Agent:
-        """Create the main orchestrator agent with sub-agents."""
-
-        # Get list of successfully connected agents
-        sub_agents = list(self.remote_agents.values())
-
-        # Create the orchestrator agent with remote agents as sub-agents
-        orchestrator = Agent(
-            name="presentation_orchestrator",
-            model="gemini-2.0-flash",
-            description="Orchestrates multi-agent presentation creation workflow",
-            instruction="""You are the orchestrator for a presentation creation system.
-
-            You coordinate the following specialized agents:
-            1. Clarifier - Refines vague user requests into clear goals
-            2. Outline - Creates presentation structure
-            3. Slide Writer - Generates slide content
-            4. Critic - Reviews and improves quality
-            5. Notes Polisher - Enhances speaker notes
-            6. Design - Creates visual specifications
-            7. Script Writer - Generates full scripts
-            8. Research - Gathers supporting data
-
-            Workflow:
-            1. First, use the clarifier to refine the user's goals
-            2. Once goals are clear, use outline to create structure
-            3. Use slide_writer to generate content for each slide
-            4. Use critic to review and improve
-            5. Optionally use enhancement agents (notes_polisher, design, script_writer)
-            6. Use research agent when additional data is needed
-
-            Always respond with structured JSON containing the workflow status and results.
-            """,
-            sub_agents=sub_agents if sub_agents else None
+    def __init__(self) -> None:
+        api_base = (
+            os.environ.get("API_GATEWAY_URL")
+            or os.environ.get("ADK_BASE_URL")
+            or "http://api-gateway:8088"
         )
+        self.api_base = api_base.rstrip('/')
 
-        return orchestrator
-
-    async def process_presentation_request(
-        self,
-        request: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Process a presentation creation request through the agent workflow."""
-
-        results = {
-            "status": "processing",
-            "stages": {}
-        }
-
+    async def _post_json(self, client: httpx.AsyncClient, path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        url = f"{self.api_base}{path}"
+        resp = await client.post(url, json=payload)
+        resp.raise_for_status()
         try:
-            # Stage 1: Clarification
-            if "clarifier" in self.remote_agents:
-                clarify_input = {
-                    "history": request.get("history", []),
-                    "initialInput": request.get("initialInput", {}),
-                    "newFiles": request.get("newFiles")
+            return resp.json()
+        except json.JSONDecodeError:
+            return {"raw": resp.text}
+
+    async def process_presentation_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        results: Dict[str, Any] = {"status": "processing", "stages": {}}
+        presentation_id = request.get("presentationId")
+        initial_input: Dict[str, Any] = request.get("initialInput") or {}
+        history: List[Dict[str, Any]] = request.get("history") or []
+        new_files: List[Dict[str, Any]] = request.get("newFiles") or []
+        raw_assets: List[Dict[str, Any]] = request.get("assets") or []
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            try:
+                clarify_payload = {
+                    "history": history,
+                    "initialInput": initial_input,
+                    "newFiles": new_files,
+                    "presentationId": presentation_id,
                 }
+                clarify_data = await self._post_json(client, "/v1/clarify", clarify_payload)
+                results["stages"]["clarification"] = clarify_data
 
-                clarify_result = await self.remote_agents["clarifier"].execute(
-                    types.Content(parts=[types.Part(text=json.dumps(clarify_input))])
+                if not clarify_data.get("finished", True):
+                    results["status"] = "needs_clarification"
+                    return results
+
+                clarified_content = (
+                    clarify_data.get("refinedGoals")
+                    or clarify_data.get("clarifiedGoals")
+                    or clarify_data.get("response")
+                    or ""
                 )
-                results["stages"]["clarification"] = clarify_result
 
-                # Check if clarification is complete
-                if clarify_result.get("finished", False):
-                    # Stage 2: Outline generation
-                    if "outline" in self.remote_agents:
-                        outline_input = {
-                            "refinedGoals": clarify_result.get("response", ""),
-                            "assets": request.get("assets")
-                        }
+                outline_payload: Dict[str, Any] = {
+                    "clarifiedContent": clarified_content,
+                    "presentationId": presentation_id,
+                    "length": initial_input.get("length"),
+                    "audience": initial_input.get("audience"),
+                    "tone": initial_input.get("tone"),
+                    "template": initial_input.get("template"),
+                }
+                outline_data = await self._post_json(client, "/v1/outline", outline_payload)
+                outline_titles: List[str] = outline_data.get("outline", [])
+                results["stages"]["outline"] = outline_data
 
-                        outline_result = await self.remote_agents["outline"].execute(
-                            types.Content(parts=[types.Part(text=json.dumps(outline_input))])
-                        )
-                        results["stages"]["outline"] = outline_result
+                if not outline_titles:
+                    results["status"] = "error"
+                    results["error"] = "Outline generation returned no titles."
+                    return results
 
-                        # Continue with slide generation, critic, etc.
-                        # This is simplified - actual implementation would continue the workflow
+                slide_payload: Dict[str, Any] = {
+                    "clarifiedContent": clarified_content,
+                    "outline": outline_titles,
+                    "audience": initial_input.get("audience"),
+                    "tone": initial_input.get("tone"),
+                    "length": initial_input.get("length"),
+                    "assets": raw_assets,
+                    "presentationId": presentation_id,
+                }
+                slide_data = await self._post_json(client, "/v1/slide/write", slide_payload)
+                slides: List[Dict[str, Any]] = slide_data.get("slides", [])
+                results["stages"]["slides"] = slide_data
 
-            results["status"] = "complete"
+                reviews: List[Dict[str, Any]] = []
+                revised_slides: List[Dict[str, Any]] = []
+                for idx, slide in enumerate(slides):
+                    critique_payload = {
+                        "presentationId": presentation_id,
+                        "slideIndex": idx,
+                        "slide": slide,
+                        "audience": initial_input.get("audience"),
+                        "tone": initial_input.get("tone"),
+                        "length": initial_input.get("length"),
+                    }
+                    try:
+                        critique_data = await self._post_json(client, "/v1/slide/critique", critique_payload)
+                        revised_slides.append(critique_data.get("slide") or slide)
+                        if critique_data.get("review"):
+                            reviews.append(critique_data["review"])
+                    except Exception as crit_err:
+                        log.warning("Critique failed for slide %s: %s", idx, crit_err)
+                        revised_slides.append(slide)
+                if reviews:
+                    results["stages"]["reviews"] = reviews
 
-        except Exception as e:
-            log.error(f"Workflow error: {e}")
-            results["status"] = "error"
-            results["error"] = str(e)
+                script_payload = {
+                    "presentationId": presentation_id,
+                    "slides": revised_slides,
+                }
+                script_data = await self._post_json(client, "/v1/script/generate", script_payload)
+                results["stages"]["script"] = script_data
+
+                results["status"] = "complete"
+                results["outline"] = outline_titles
+                results["slides"] = revised_slides
+                results["script"] = script_data.get("script", "")
+            except Exception as exc:
+                log.error("Workflow error: %s", exc)
+                results["status"] = "error"
+                results["error"] = str(exc)
 
         return results
 
 
-# Create global orchestrator instance
+def run_workflow(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Convenience wrapper for synchronous callers."""
+    return asyncio.run(PresentationOrchestrator().process_presentation_request(payload))
+
+
 orchestrator = PresentationOrchestrator()
-
-# Create the ADK agent
-root_agent = orchestrator.create_agent()
-
-log.info(f"Orchestrator agent '{root_agent.name}' created with {len(orchestrator.remote_agents)} remote agents")
