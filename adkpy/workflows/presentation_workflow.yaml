@@ -1,0 +1,256 @@
+id: presentation_workflow
+version: 0.5.0
+description: Enhanced multi-stage workflow with comprehensive visual quality gates, accessibility compliance, and automated fixes.
+state_model: adkpy.schemas.workflow_state.PresentationWorkflowState
+metadata:
+  owner: presentationpro
+  tags:
+    - graph-rag
+    - sequential
+    - parallel
+    - quality-gates
+    - accessibility
+    - auto-fixes
+    - visual-quality
+  features:
+    - Visual quality assessment (accessibility, brand, clarity)
+    - Automatic fix application for common issues
+    - WCAG compliance checking
+    - Brand consistency validation
+    - Quality metrics tracking and reporting
+    - Enhanced critic agent with quality tools
+  quality_thresholds:
+    excellent: 90
+    good: 75
+    acceptable: 60
+    poor: 0
+steps:
+  - id: ingest_assets
+    type: tool
+    name: graph_rag.ingest
+    description: Ingest newly uploaded assets into the Graph RAG store.
+    input:
+      presentation_id: ${inputs.presentationId}
+      assets: ${inputs.newFiles}
+    on_success:
+      mutate_state: cache_ingest_summary
+
+  - id: clarify
+    type: agent
+    name: clarifier
+    description: Clarify presentation goals with the user.
+    input:
+      history: ${inputs.history}
+      initialInput: ${inputs.initialInput}
+      newFiles: ${inputs.newFiles}
+      presentationId: ${inputs.presentationId}
+    on_success:
+      mutate_state: store_clarify_result
+
+  - id: outline
+    type: agent
+    name: outline
+    description: Generate the presentation outline.
+    input:
+      clarifiedContent: ${state.clarify.response}
+      audience: ${inputs.initialInput.audience}
+      tone: ${inputs.initialInput.tone}
+      length: ${inputs.initialInput.length}
+      template: ${inputs.initialInput.template}
+    on_success:
+      mutate_state: store_outline_result
+
+  - id: section_rag_prefetch
+    type: parallel
+    name: section_rag_prefetch
+    description: Retrieve Graph RAG context for each outline section in parallel.
+    foreach: ${state.outline.sections}
+    workflow:
+      id: section_rag_workflow
+      type: sequential
+      steps:
+        - id: retrieve_section_context
+          type: tool
+          name: graph_rag.retrieve
+          input:
+            presentation_id: ${inputs.presentationId}
+            query: ${item.title}
+            limit: 6
+          on_success:
+            mutate_state: cache_section_rag
+
+  - id: slide_generation
+    type: agent
+    name: slide_writer
+    description: Generate slides for the full outline.
+    input:
+      clarifiedContent: ${state.clarify.response}
+      outline: ${state.outline.raw.outline}
+      audience: ${inputs.initialInput.audience}
+      tone: ${inputs.initialInput.tone}
+      length: ${inputs.initialInput.length}
+      assets: ${inputs.newFiles}
+      ragContext: ${state.rag}
+    on_success:
+      mutate_state: set_slides
+
+  - id: slide_design
+    type: parallel
+    name: slide_design
+    description: Generate visual design tokens for each slide.
+    foreach: ${state.slides}
+    workflow:
+      id: slide_design_workflow
+      type: sequential
+      steps:
+        - id: select_design_tokens
+          type: tool
+          name: workflow.map_design_tokens
+          input:
+            initialInput: ${inputs.initialInput}
+            slide: ${item}
+        - id: design_slide
+          type: agent
+          name: design
+          description: Propose background tokens and assets for the slide.
+          input:
+            slide: ${item}
+            theme: ${steps.select_design_tokens.result.background}
+            pattern: ${steps.select_design_tokens.result.pattern}
+            overlay: ${steps.select_design_tokens.result.overlay}
+            layout: ${steps.select_design_tokens.result.layout}
+        - id: store_design
+          type: tool
+          name: workflow.prepare_design_payload
+          input:
+            slideId: ${item.id}
+            designResponse: ${steps.design_slide.result}
+            tokens: ${steps.select_design_tokens.result}
+            presentationId: ${inputs.presentationId}
+          on_success:
+            mutate_state: merge_design
+
+  - id: slide_review
+    type: parallel
+    name: slide_review
+    description: Critique and refine slides with comprehensive quality gates.
+    foreach: ${state.slides}
+    workflow:
+      id: slide_review_workflow
+      type: sequential
+      steps:
+        - id: visual_quality_assessment
+          type: tool
+          name: workflow.assess_slide_quality
+          description: Assess comprehensive visual quality metrics
+          input:
+            slideContent: ${item}
+            slideImage: ${item.image_url}
+            qualityThreshold: 75
+        - id: quality_gate_check
+          type: tool
+          name: workflow.quality_gate_decision
+          description: Determine if slide passes quality gates
+          input:
+            qualityAssessment: ${steps.visual_quality_assessment.result}
+            slideId: ${item.id}
+          on_success:
+            mutate_state: update_quality_metrics
+        - id: auto_fix_application
+          type: tool
+          name: workflow.apply_quality_fixes
+          description: Apply automatic fixes for quality issues
+          condition: ${steps.quality_gate_check.result.requires_fixes}
+          input:
+            slideContent: ${item}
+            qualityAssessment: ${steps.visual_quality_assessment.result}
+            slideImage: ${item.image_url}
+        - id: enhanced_critique
+          type: agent
+          name: critic
+          description: Enhanced critique with quality gates and auto-fixes
+          input:
+            slide: ${steps.auto_fix_application.result.fixed_content || item}
+            assets: ${inputs.newFiles}
+            slideImage: ${item.image_url}
+            qualityAssessment: ${steps.visual_quality_assessment.result}
+            qualityThreshold: 75
+        - id: final_quality_validation
+          type: tool
+          name: workflow.validate_final_quality
+          description: Validate final slide quality after critique
+          input:
+            slideContent: ${steps.enhanced_critique.result}
+            originalQuality: ${steps.visual_quality_assessment.result}
+            slideId: ${item.id}
+        - id: store_enhanced_feedback
+          type: tool
+          name: workflow.prepare_enhanced_critic_payload
+          input:
+            slideId: ${item.id}
+            critique: ${steps.enhanced_critique.result}
+            qualityMetrics: ${steps.final_quality_validation.result}
+            appliedFixes: ${steps.auto_fix_application.result.applied_fixes || []}
+          on_success:
+            mutate_state: merge_enhanced_critic_feedback
+
+  - id: notes_polish
+    type: parallel
+    name: notes_polish
+    description: Polish speaker notes to match the requested tone.
+    foreach: ${state.slides}
+    workflow:
+      id: notes_polish_workflow
+      type: sequential
+      steps:
+        - id: select_notes_tone
+          type: tool
+          name: workflow.select_notes_tone
+          input:
+            initialInput: ${inputs.initialInput}
+        - id: polish_notes
+          type: agent
+          name: notes_polisher
+          input:
+            speakerNotes: ${item.speakerNotes}
+            tone: ${steps.select_notes_tone.result.tone}
+        - id: store_polished_notes
+          type: tool
+          name: workflow.prepare_notes_payload
+          input:
+            slideId: ${item.id}
+            polisherResult: ${steps.polish_notes.result}
+          on_success:
+            mutate_state: merge_notes
+
+  - id: script_generation
+    type: agent
+    name: script_writer
+    description: Generate a presenter-ready script covering the full deck.
+    input:
+      slides: ${state.slides}
+      assets: ${inputs.newFiles}
+    on_success:
+      mutate_state: store_script
+
+  - id: quality_gate_summary
+    type: tool
+    name: workflow.generate_quality_summary
+    description: Generate comprehensive quality assessment summary
+    input:
+      slides: ${state.slides}
+      qualityState: ${state.quality_state}
+    on_success:
+      mutate_state: store_quality_summary
+
+  - id: finalize_payload
+    type: tool
+    name: workflow.finalize_enhanced_payload
+    description: Assemble the response payload with quality metrics.
+    input:
+      slides: ${state.slides}
+      script: ${state.script}
+      ragContext: ${state.rag}
+      qualityState: ${state.quality_state}
+    on_success:
+      mutate_state: set_final_response

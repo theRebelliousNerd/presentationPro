@@ -548,6 +548,9 @@ export async function loadPresentation(presentationId: string): Promise<Presenta
         slides: [],
         fullScript: '',
         researchNotebook: [],
+        workflowSessionId: undefined,
+        workflowState: undefined,
+        workflowTrace: [],
       };
 
       return arangoClient.arangoStateToPresentation(result.data, fallbackPresentation);

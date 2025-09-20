@@ -13,7 +13,7 @@ import json
 import logging
 from typing import Any, Callable, Dict, List, Optional, Type, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from .schemas import ToolDefinition, ToolParameter
 
@@ -38,8 +38,8 @@ class ToolMetadata(BaseModel):
 class ToolWrapper(BaseModel):
     """Base class for tool wrappers"""
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
 
     name: str
     handler: Any  # The actual tool handler object
@@ -428,3 +428,4 @@ class ToolRegistry:
         wrapper.metadata.deprecation_message = message
 
         logger.warning(f"Tool {name} marked as deprecated: {message}")
+

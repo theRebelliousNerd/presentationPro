@@ -15,6 +15,8 @@ import { generateSlideContent } from '@/lib/actions';
 import RichBullets from './RichBullets';
 import { Badge } from '@/components/ui/badge';
 import DesignPanel from './design/DesignPanel';
+import PlacementSuggestions from './design/PlacementSuggestions';
+import QualityBadge, { type QualityMetrics } from './QualityBadge';
 import { resolveAdkBaseUrl } from '@/lib/base-url';
 
 type SlideEditorProps = {
@@ -37,6 +39,7 @@ export default function SlideEditor({ slide, updateSlide, assets = [], constrain
   const [patternName, setPatternName] = useState('topography');
   const [reviews, setReviews] = useState<{ created_at?: string; agent_source?: string; review_data?: { issues?: string[]; suggestions?: string[] } }[]>([]);
   const [selectedGraphic, setSelectedGraphic] = useState<string>('');
+  const [showCompositionGrids, setShowCompositionGrids] = useState(false);
   
   const handleRephrase = async (tone: 'professional' | 'concise') => {
     setIsRephrasing(true);
@@ -59,7 +62,8 @@ export default function SlideEditor({ slide, updateSlide, assets = [], constrain
   const handleImprove = async () => {
     try {
       addUsage({ model: 'gemini-2.5-flash', kind: 'prompt', tokens: estimateTokens(slide.title + (slide.speakerNotes||'')), at: Date.now() } as any);
-      const [improved] = await generateSlideContent({ outline: [slide.title], existing: [{ title: slide.title, content: slide.content, speakerNotes: slide.speakerNotes }], assets, constraints });
+      const result = await generateSlideContent({ outline: [slide.title], existing: [{ title: slide.title, content: slide.content, speakerNotes: slide.speakerNotes }], assets, constraints, presentationId });
+      const improved = (result.slides && result.slides[0]) || { title: slide.title, content: slide.content, speakerNotes: slide.speakerNotes, imagePrompt: slide.imagePrompt } as any;
       const crit = await critiqueSlide({ title: improved.title, content: improved.content as any, speakerNotes: improved.speakerNotes, imagePrompt: improved.imagePrompt });
       updateSlide(slide.id, {
         title: crit.title,
@@ -100,45 +104,49 @@ export default function SlideEditor({ slide, updateSlide, assets = [], constrain
     <Card className="flex-grow flex flex-col lg:flex-row gap-3 p-3 overflow-hidden shadow-none rounded-none border-0">
       <div className="lg:w-1/2 h-full flex flex-col gap-4">
         <ImageDisplay slide={slide} updateSlide={updateSlide} />
-        {slide.designSpec?.placementCandidates && slide.designSpec.placementCandidates.length ? (
-          <div className="border rounded-md p-3 bg-muted/40">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                <Crosshair className="h-4 w-4" /> Vision placement hints
-              </div>
-              {(() => {
-                const fw = Number(slide.designSpec?.placementFrame?.width);
-                const fh = Number(slide.designSpec?.placementFrame?.height);
-                if (Number.isFinite(fw) && Number.isFinite(fh)) {
-                  return (
-                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground/80">
-                      {Math.round(fw)}×{Math.round(fh)}
-                    </span>
-                  );
-                }
-                return null;
-              })()}
-            </div>
-            <div className="space-y-1.5">
-              {slide.designSpec.placementCandidates.slice(0, 4).map((candidate, idx) => (
-                <div key={idx} className="flex items-center justify-between text-xs bg-background/80 border rounded px-2 py-1">
-                  <span className="font-medium">Option {idx + 1}</span>
-                  <div className="flex items-center gap-3 text-muted-foreground">
-                    <span>Score {(Number(candidate?.score) || 0).toFixed(2)}</span>
-                    {(() => {
-                      const bw = Number(candidate?.bounding_box?.width);
-                      const bh = Number(candidate?.bounding_box?.height);
-                      if (Number.isFinite(bw) && Number.isFinite(bh)) {
-                        return <span>{Math.round(bw)}×{Math.round(bh)}</span>;
-                      }
-                      return null;
-                    })()}
-                  </div>
-                </div>
-              ))}
-            </div>
+
+        {/* Quality Badge - show if we have quality metrics */}
+        {slide.qualityMetrics && (
+          <QualityBadge
+            metrics={slide.qualityMetrics}
+            variant="compact"
+            showImprovements={true}
+          />
+        )}
+
+        {/* Toggle for composition grids */}
+        {slide.designSpec?.placementCandidates && slide.designSpec.placementCandidates.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Switch
+              id={`show-composition-${slide.id}`}
+              checked={showCompositionGrids}
+              onCheckedChange={setShowCompositionGrids}
+            />
+            <label htmlFor={`show-composition-${slide.id}`} className="text-sm text-muted-foreground cursor-pointer">
+              Show composition assistant
+            </label>
           </div>
-        ) : null}
+        )}
+
+        {/* PlacementSuggestions component */}
+        {showCompositionGrids && slide.designSpec?.placementCandidates && slide.designSpec.placementCandidates.length > 0 && (
+          <PlacementSuggestions
+            slide={slide}
+            updateSlide={updateSlide}
+            onApplyPlacement={(placement) => {
+              // Apply placement to slide's design spec
+              updateSlide(slide.id, {
+                designSpec: {
+                  ...slide.designSpec,
+                  appliedPlacement: placement,
+                }
+              });
+              // Optionally trigger a re-render or animation
+              console.log('Placement applied:', placement);
+            }}
+          />
+        )}
+
         <DesignPanel slide={slide} updateSlide={updateSlide} applyTokensToAll={applyTokensToAll} />
         <div className="flex items-center gap-3">
           <Switch id={`ai-image-${slide.id}`} checked={slide.useGeneratedImage ?? true} onCheckedChange={(v) => updateSlide(slide.id, { useGeneratedImage: v })} />

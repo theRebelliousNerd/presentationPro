@@ -13,7 +13,7 @@ import json
 import uuid
 from threading import Lock
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 logger = logging.getLogger(__name__)
@@ -50,6 +50,8 @@ class PresentationSession(BaseModel):
 
     # Results from agents
     results: Dict[str, Any] = Field(default_factory=dict)
+    workflow_context: Dict[str, Any] = Field(default_factory=dict)
+    final_response: Optional[Dict[str, Any]] = None
 
     # Error tracking
     errors: List[Dict[str, Any]] = Field(default_factory=list)
@@ -60,8 +62,8 @@ class PresentationSession(BaseModel):
     # Usage tracking
     usage: Dict[str, Any] = Field(default_factory=dict)
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
 
     def update_state(self, workflow_state: str):
         """Update workflow state."""
@@ -78,6 +80,16 @@ class PresentationSession(BaseModel):
         # Update usage if present
         if isinstance(result, dict) and "usage" in result:
             self._update_usage(agent_name, result["usage"])
+    def store_workflow_context(self, context: Dict[str, Any]):
+        """Persist a snapshot of the workflow state for downstream consumers."""
+        self.workflow_context = context or {}
+        self.updated_at = datetime.utcnow()
+
+    def store_final_response(self, payload: Dict[str, Any]):
+        """Persist the final payload returned by the workflow."""
+        self.final_response = payload or {}
+        self.updated_at = datetime.utcnow()
+
 
     def add_slide(self, slide_number: int, slide_data: Dict[str, Any]):
         """Add a slide to the presentation."""
@@ -126,6 +138,8 @@ class PresentationSession(BaseModel):
             "slides": self.slides,
             "research": self.research,
             "script": self.script,
+            "workflow_context": self.workflow_context,
+            "final_response": self.final_response
             "metadata": self.metadata
         }
 
@@ -160,7 +174,9 @@ class PresentationSession(BaseModel):
             "results": self.results,
             "errors": self.errors,
             "metadata": self.metadata,
-            "usage": self.usage
+            "usage": self.usage,
+            "workflow_context": self.workflow_context,
+            "final_response": self.final_response
         }
 
 
@@ -474,3 +490,4 @@ class SessionManager:
             count = len(self.sessions)
             self.sessions.clear()
             logger.info(f"Cleared {count} sessions")
+

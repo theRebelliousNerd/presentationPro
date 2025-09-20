@@ -15,6 +15,8 @@ import uuid
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from adkpy.config.runtime import get_agent_endpoints
+from .workflow_runner import WorkflowRunner
 
 # Comment out missing imports for now - these modules need to be created
 # from workflow_engine import WorkflowEngine, WorkflowState
@@ -33,8 +35,8 @@ logger = logging.getLogger(__name__)
 PORT = int(os.environ.get("ORCHESTRATOR_PORT", "8080"))
 ENVIRONMENT = os.environ.get("ENVIRONMENT", "production")
 
-# Agent service URLs (Docker network names)
-AGENT_URLS = {
+# Agent service URLs
+DEFAULT_AGENT_URLS = {
     "clarifier": os.environ.get("CLARIFIER_URL", "http://clarifier:10001"),
     "outline": os.environ.get("OUTLINE_URL", "http://outline:10002"),
     "slide_writer": os.environ.get("SLIDE_WRITER_URL", "http://slide-writer:10003"),
@@ -44,6 +46,7 @@ AGENT_URLS = {
     "script_writer": os.environ.get("SCRIPT_WRITER_URL", "http://script-writer:10007"),
     "research": os.environ.get("RESEARCH_URL", "http://research:10008")
 }
+AGENT_URLS = {**DEFAULT_AGENT_URLS, **get_agent_endpoints()}
 
 
 class OrchestratorService:
@@ -58,6 +61,7 @@ class OrchestratorService:
         self.registry = AgentRegistry()
         self.session_manager = SessionManager()
         self.workflow_engine = WorkflowEngine(self.registry, self.session_manager)
+        self.workflow_runner = WorkflowRunner()
         self.startup_time = datetime.utcnow()
         self.request_count = 0
         self.error_count = 0
@@ -102,6 +106,27 @@ class OrchestratorService:
         asyncio.create_task(self._monitor_agents())
 
         logger.info(f"Orchestrator initialized with {len(discovered)} agents")
+
+    async def execute_workflow(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute the presentation workflow using the workflow runner."""
+
+        payload = request or {}
+        result = await self.workflow_runner.run(self.app, payload)
+        state_payload = result.get("state", {})
+        session_id = state_payload.get("metadata", {}).get("sessionId")
+        if session_id:
+            session = self.session_manager.get_session(session_id)
+            if not session:
+                session = self.session_manager.create_session(session_id)
+            session.store_workflow_context(state_payload)
+            if result.get("final"):
+                session.store_final_response(result.get("final"))
+        return {
+            "session_id": session_id,
+            "state": state_payload,
+            "final": result.get("final"),
+            "trace": result.get("trace", []),
+        }
 
     async def _monitor_agents(self):
         """Continuously monitor agent health."""
@@ -182,6 +207,8 @@ class OrchestratorService:
                     })
 
             return {"agents": agents}
+
+        logger.info("Registering /v1/workflow/presentation route")
 
         # Clarification endpoint
         @self.app.post("/v1/clarify")
@@ -402,12 +429,31 @@ orchestrator = OrchestratorService()
 # Setup FastAPI app
 app = orchestrator.app
 
+# Register routes immediately so OpenAPI reflects workflow endpoints
+orchestrator.setup_routes()
+
+
+async def workflow_presentation_endpoint(request: Dict[str, Any]):
+    """Module-level entry point for the presentation workflow (used by UI)."""
+    orchestrator.request_count += 1
+    try:
+        return await orchestrator.execute_workflow(request)
+    except HTTPException:
+        orchestrator.error_count += 1
+        raise
+    except Exception as exc:
+        orchestrator.error_count += 1
+        logger.error("Workflow execution failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+app.add_api_route("/v1/workflow/presentation", workflow_presentation_endpoint, methods=["POST"], tags=["orchestrator"])
+logger.info("Registered /v1/workflow/presentation endpoint")
+
 # Event handlers
 @app.on_event("startup")
 async def startup_event():
     """Initialize orchestrator on startup."""
     await orchestrator.initialize()
-    orchestrator.setup_routes()
     logger.info(f"Orchestrator started on port {PORT}")
 
 @app.on_event("shutdown")

@@ -1,0 +1,256 @@
+'use client';
+import { useState, useRef, useEffect, Dispatch, SetStateAction } from 'react';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Send, User, Bot, Loader2, Lightbulb } from 'lucide-react';
+import { getClarification, ingestAssets } from '@/lib/actions';
+import { Presentation, ChatMessage, UploadedFileRef } from '@/lib/types';
+import { cn } from '@/lib/utils';
+import { Progress } from '@/components/ui/progress';
+import FileDropzone from './FileDropzone';
+import { Skeleton } from '@/components/ui/skeleton';
+import { nanoid } from 'nanoid';
+import { addUsage, estimateTokens } from '@/lib/token-meter';
+import FormsPreviewDialog from '@/components/app/FormsPreviewDialog'
+
+type ClarificationChatProps = {
+  presentation: Presentation;
+  setPresentation: Dispatch<SetStateAction<Presentation>>;
+  onClarificationComplete: (finalGoals: string) => void;
+  uploadFile: (file: File) => Promise<UploadedFileRef>;
+  compact?: boolean;
+};
+
+const CONTEXT_SUGGESTIONS = [
+  'Consider providing a company logo or brand colors.',
+  'Do you have any specific data or studies to include?',
+  'Are there key images or diagrams that should be in the presentation?',
+  'What is the key takeaway for the audience?',
+  'Is there a specific call to action?',
+  'Mention any important competitors or market context.',
+];
+
+export default function ClarificationChat({ presentation, setPresentation, onClarificationComplete, uploadFile, compact = false }: ClarificationChatProps) {
+  const [input, setInput] = useState('');
+  const [newRawFiles, setNewRawFiles] = useState<File[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [progress, setProgress] = useState(10);
+  const [suggestion, setSuggestion] = useState('');
+
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const { chatHistory, initialInput } = presentation;
+
+  const mergeWorkflowMeta = (prev: Presentation, meta: { workflowSessionId?: string; workflowState?: any; workflowTrace?: any[] }): Presentation => {
+    const next = { ...prev };
+    if (meta.workflowSessionId) {
+      next.workflowSessionId = meta.workflowSessionId;
+    }
+    if (meta.workflowState !== undefined) {
+      next.workflowState = meta.workflowState;
+    }
+    next.workflowTrace = meta.workflowTrace ?? next.workflowTrace ?? [];
+    return next;
+  };
+
+  const scrollToBottom = () => {
+    if (scrollAreaRef.current) {
+      scrollAreaRef.current.scrollTo({ top: scrollAreaRef.current.scrollHeight, behavior: 'smooth' });
+    }
+  };
+  
+  useEffect(scrollToBottom, [chatHistory]);
+
+  useEffect(() => {
+    const getInitialMessage = async () => {
+      if (chatHistory.length === 0) {
+        setIsLoading(true);
+        try {
+          const response = await getClarification({
+
+            history: [],
+
+            initialInput,
+
+            newFiles: [],
+
+            presentationId: presentation.id,
+
+            sessionId: presentation.workflowSessionId,
+
+            workflowState: presentation.workflowState,
+
+          });
+
+          const aiResponseContent = response.refinedGoals.trim();
+      const newAiMessage: ChatMessage = { id: nanoid(), role: 'model', content: aiResponseContent, createdAt: Date.now() };
+
+      let intents: { name: string; intent: 'content'|'style'|'graphics'|'ignore'; notes?: string }[] | undefined;
+      try {
+        intents = (response as any).fileIntents;
+      } catch {
+        intents = undefined;
+      }
+      const patch = (response as any).initialInputPatch as any;
+
+      setPresentation(prev => {
+        let next = mergeWorkflowMeta(prev, response);
+        const nextInitial = { ...next.initialInput };
+        nextInitial.files = [...(nextInitial.files || []), ...uploadedFileInfos];
+        nextInitial.styleFiles = [...(nextInitial.styleFiles || [])];
+        nextInitial.graphicsFiles = [...(nextInitial.graphicsFiles || [])];
+
+        if (patch && typeof patch === 'object') {
+          Object.assign(nextInitial, patch);
+          nextInitial.files = nextInitial.files || [];
+          nextInitial.styleFiles = nextInitial.styleFiles || [];
+          nextInitial.graphicsFiles = nextInitial.graphicsFiles || [];
+        }
+
+        if (Array.isArray(intents) && intents.length) {
+          const byName = new Map<string, UploadedFileRef>([
+            ...((nextInitial.files || []).map(f => [f.name, f] as [string, UploadedFileRef])),
+            ...((nextInitial.styleFiles || []).map(f => [f.name, f] as [string, UploadedFileRef])),
+            ...((nextInitial.graphicsFiles || []).map(f => [f.name, f] as [string, UploadedFileRef])),
+            ...uploadedFileInfos.map(f => [f.name, f] as [string, UploadedFileRef]),
+          ]);
+          const pushUnique = (arr: UploadedFileRef[], file: UploadedFileRef) => {
+            if (!arr.find(x => x.name === file.name)) arr.push(file);
+          };
+          const removeFrom = (arr: UploadedFileRef[], name: string) => arr.filter(x => x.name !== name);
+          let files = [...(nextInitial.files || [])];
+          let styleFiles = [...(nextInitial.styleFiles || [])];
+          let graphicsFiles = [...(nextInitial.graphicsFiles || [])];
+          for (const it of intents) {
+            const file = it && byName.get(it.name);
+            if (!file) continue;
+            files = removeFrom(files, file.name);
+            styleFiles = removeFrom(styleFiles, file.name);
+            graphicsFiles = removeFrom(graphicsFiles, file.name);
+            if (it.intent === 'content') pushUnique(files, file);
+            else if (it.intent === 'style') pushUnique(styleFiles, file);
+            else if (it.intent === 'graphics') pushUnique(graphicsFiles, file);
+          }
+          nextInitial.files = files;
+          nextInitial.styleFiles = styleFiles;
+          nextInitial.graphicsFiles = graphicsFiles;
+        }
+
+        next = {
+          ...next,
+          chatHistory: [...newHistory, newAiMessage],
+          initialInput: nextInitial,
+        };
+        return next;
+      });
+
+      if (response.finished) {
+        setProgress(100);
+        onClarificationComplete(aiResponseContent);
+      }
+      // Estimate completion tokens
+      const usage = (response as any).usage;
+      if (usage && usage.completionTokens) {
+        addUsage({ model: usage.model || 'gemini-2.5-flash', kind: 'completion', tokens: usage.completionTokens, at: Date.now() } as any);
+      } else if (aiResponseContent) {
+        addUsage({ model: 'gemini-2.5-flash', kind: 'completion', tokens: estimateTokens(aiResponseContent), at: Date.now() } as any);
+      }
+    } catch (error) {
+      console.error("Chat error:", error);
+      const errorMessage: ChatMessage = { id: nanoid(), role: 'model', content: 'Sorry, I encountered an error. Please try again.', createdAt: Date.now() };
+      setPresentation(prev => ({...prev, chatHistory: [...newHistory, errorMessage]}));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const isChatReady = Boolean(presentation.id) && chatHistory.length > 0;
+
+  return (
+    <Card className={cn("flex flex-col shadow-2xl md-surface md-elevation-2", compact ? "w-80 h-[calc(100vh-140px)] sticky top-24" : "w-full max-w-3xl h-[85vh]") }>
+      <CardHeader className={compact ? "py-3" : undefined}>
+        <div className="flex items-center justify-between">
+          <CardTitle className={cn("font-headline", compact ? "text-lg" : "text-3xl")}>Refine Goals</CardTitle>
+          <FormsPreviewDialog presentation={presentation as any} setPresentation={setPresentation as any}>
+            <Button size="sm" variant="outline">Review Fields</Button>
+          </FormsPreviewDialog>
+        </div>
+        {!compact && (
+          <CardDescription>
+            I'm your presentation strategist. Answer my questions to help me understand your goals. You can also add more files.
+          </CardDescription>
+        )}
+      </CardHeader>
+      <CardContent className="flex-grow overflow-hidden flex flex-col gap-4">
+        <ScrollArea className="h-full pr-4" ref={scrollAreaRef}>
+          <div className="space-y-6">
+            {!isChatReady && (
+                <div className="flex items-start gap-3 justify-start">
+                    <Bot className="h-6 w-6 text-primary flex-shrink-0 mt-1" />
+                    <Skeleton className="w-3/4 h-16" />
+                </div>
+            )}
+            {isChatReady && chatHistory.map((message, index) => (
+              <div key={message.id ?? String(index)} className={cn("flex items-start gap-3", message.role === 'user' ? 'justify-end' : 'justify-start')}>
+                {message.role === 'model' && <Bot className="h-6 w-6 text-primary flex-shrink-0 mt-1" />}
+                <div className={cn("p-4 rounded-xl max-w-[80%] whitespace-pre-wrap", message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted')}>
+                  {message.content}
+                </div>
+                {message.role === 'user' && <User className="h-6 w-6 text-foreground flex-shrink-0 mt-1" />}
+              </div>
+            ))}
+            {isLoading && chatHistory.length > 0 && (
+              <div className="flex items-start gap-3 justify-start">
+                <Bot className="h-6 w-6 text-primary flex-shrink-0 mt-1" />
+                <div className="p-4 rounded-xl bg-muted">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                </div>
+              </div>
+            )}
+          </div>
+        </ScrollArea>
+        <div className="flex-shrink-0 pt-2 space-y-4">
+            {/* File drop support in both compact and full modes */}
+            <div className={compact ? 'border border-dashed rounded p-2 text-xs text-muted-foreground' : ''}>
+              <FileDropzone 
+                onFilesChange={setNewRawFiles}
+                acceptedFormats=".pdf, .docx, .md, .txt, .png, .jpg, .jpeg, .webp, .gif, .svg, .csv"
+              />
+              {compact ? (
+                <div className="mt-1 text-[11px] text-muted-foreground">Drop files here to add context</div>
+              ) : null}
+            </div>
+            <div className="space-y-2">
+                <div className="flex justify-between text-sm font-medium text-muted-foreground">
+                    <span>Context Meter</span>
+                    <span>{progress}%</span>
+                </div>
+                <Progress value={progress} className="w-full" />
+                {!compact && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
+                    <Lightbulb className="h-4 w-4 text-yellow-400" />
+                    <span><b>Suggestion:</b> {suggestion}</span>
+                </div>
+                )}
+            </div>
+        </div>
+      </CardContent>
+      <CardFooter>
+        <form onSubmit={handleSubmit} className="w-full flex items-center gap-2">
+          <Input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={compact ? "Ask or add context..." : "Type your message or add files above..."}
+            disabled={isLoading}
+            autoComplete="off"
+          />
+          <Button type="submit" disabled={isLoading || (!input.trim() && newRawFiles.length === 0)}>
+            {isLoading && newRawFiles.length === 0 ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          </Button>
+        </form>
+      </CardFooter>
+    </Card>
+  );
+}
+

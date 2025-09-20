@@ -57,12 +57,22 @@ def call_tool(name: str, args: Dict[str, Any]) -> Any:
 
     url = os.environ.get("VISIONCV_URL")
     if not url:
-        raise RuntimeError("VISIONCV_URL not set")
-    return _run_sync(_call_tool_async(url, name, args))
+        raise RuntimeError("VISIONCV_URL environment variable not set. Expected format: http://visioncv:9170/mcp")
+
+    try:
+        return _run_sync(_call_tool_async(url, name, args))
+    except Exception as e:
+        # Provide more detailed error information for troubleshooting
+        raise RuntimeError(f"Failed to call VisionCV tool '{name}' at {url}: {str(e)}") from e
 
 
 def list_tools() -> Any:
     url = os.environ.get("VISIONCV_URL")
     if not url:
-        raise RuntimeError("VISIONCV_URL not set")
-    return list(_run_sync(_list_tools_async(url)))
+        raise RuntimeError("VISIONCV_URL environment variable not set. Expected format: http://visioncv:9170/mcp")
+
+    try:
+        return list(_run_sync(_list_tools_async(url)))
+    except Exception as e:
+        # Provide more detailed error information for troubleshooting
+        raise RuntimeError(f"Failed to list VisionCV tools at {url}: {str(e)}") from e

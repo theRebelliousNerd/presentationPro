@@ -13,6 +13,7 @@ services:
       - NEXT_PUBLIC_ADK_BASE_URL=http://localhost:18088
       - ADK_BASE_URL=http://api-gateway:8088
       - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_GENAI_API_KEY}
       - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-50}
     depends_on:
       - api-gateway
@@ -33,6 +34,7 @@ services:
       - "18088:8088"
     environment:
       - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_GENAI_API_KEY}
       - ARANGODB_URL=http://arangodb:8529
       - ARANGODB_USER=root
       - ARANGODB_PASSWORD=${ARANGO_ROOT_PASSWORD:-root}
@@ -48,9 +50,9 @@ services:
       - SCRIPT_WRITER_URL=http://script-writer:10007
       - RESEARCH_URL=http://research:10008
       - VISIONCV_URL=http://visioncv:9170/mcp
-      - VISIONCV_AUTO_QA=${VISIONCV_AUTO_QA:-false}
-      - DESIGN_USE_VISIONCV=${DESIGN_USE_VISIONCV:-false}
-      - RESEARCH_USE_VISIONCV=${RESEARCH_USE_VISIONCV:-false}
+      - VISIONCV_AUTO_QA=true
+      - DESIGN_USE_VISIONCV=true
+      - RESEARCH_USE_VISIONCV=true
       - ARANGO_URL=http://arangodb:8529
     depends_on:
       - clarifier
@@ -77,14 +79,15 @@ services:
   # Agent Services
   clarifier:
     build:
-      context: ./adkpy/agents/clarifier
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: adkpy/agents/clarifier/Dockerfile
     container_name: presentationpro-clarifier
     ports:
       - "10001:10001"
     environment:
       - A2A_PORT=10001
       - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_GENAI_API_KEY}
       - PUBLIC_URL=http://clarifier:10001
       - ARANGODB_URL=http://arangodb:8529
       - ARANGODB_USER=root
@@ -94,21 +97,22 @@ services:
       - backend-network
       - database-network
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:10001/health')\""]
+      test: ["CMD-SHELL", "python -c \"import socket;s=socket.create_connection(('localhost', 10001), timeout=5);s.close()\""]
       interval: 30s
       timeout: 5s
       retries: 3
 
   outline:
     build:
-      context: ./adkpy/agents/outline
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: adkpy/agents/outline/Dockerfile
     container_name: presentationpro-outline
     ports:
       - "10002:10002"
     environment:
       - A2A_PORT=10002
       - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_GENAI_API_KEY}
       - PUBLIC_URL=http://outline:10002
       - ARANGODB_URL=http://arangodb:8529
       - ARANGODB_USER=root
@@ -118,21 +122,22 @@ services:
       - backend-network
       - database-network
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:10002/health')\""]
+      test: ["CMD-SHELL", "python -c \"import socket;s=socket.create_connection(('localhost', 10002), timeout=5);s.close()\""]
       interval: 30s
       timeout: 5s
       retries: 3
 
   slide-writer:
     build:
-      context: ./adkpy/agents/slide_writer
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: adkpy/agents/slide_writer/Dockerfile
     container_name: presentationpro-slide-writer
     ports:
       - "10003:10003"
     environment:
       - A2A_PORT=10003
       - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_GENAI_API_KEY}
       - PUBLIC_URL=http://slide-writer:10003
       - ARANGODB_URL=http://arangodb:8529
       - ARANGODB_USER=root
@@ -142,21 +147,22 @@ services:
       - backend-network
       - database-network
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:10003/health')\""]
+      test: ["CMD-SHELL", "python -c \"import socket;s=socket.create_connection(('localhost', 10003), timeout=5);s.close()\""]
       interval: 30s
       timeout: 5s
       retries: 3
 
   critic:
     build:
-      context: ./adkpy/agents/critic
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: adkpy/agents/critic/Dockerfile
     container_name: presentationpro-critic
     ports:
       - "10004:10004"
     environment:
       - A2A_PORT=10004
       - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_GENAI_API_KEY}
       - PUBLIC_URL=http://critic:10004
       - ARANGODB_URL=http://arangodb:8529
       - ARANGODB_USER=root
@@ -166,21 +172,22 @@ services:
       - backend-network
       - database-network
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:10004/health')\""]
+      test: ["CMD-SHELL", "python -c \"import socket;s=socket.create_connection(('localhost', 10004), timeout=5);s.close()\""]
       interval: 30s
       timeout: 5s
       retries: 3
 
   notes-polisher:
     build:
-      context: ./adkpy/agents/notes_polisher
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: adkpy/agents/notes_polisher/Dockerfile
     container_name: presentationpro-notes-polisher
     ports:
       - "10005:10005"
     environment:
       - A2A_PORT=10005
       - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_GENAI_API_KEY}
       - PUBLIC_URL=http://notes-polisher:10005
       - ARANGODB_URL=http://arangodb:8529
       - ARANGODB_USER=root
@@ -190,21 +197,22 @@ services:
       - backend-network
       - database-network
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:10005/health')\""]
+      test: ["CMD-SHELL", "python -c \"import socket;s=socket.create_connection(('localhost', 10005), timeout=5);s.close()\""]
       interval: 30s
       timeout: 5s
       retries: 3
 
   design:
     build:
-      context: ./adkpy/agents/design
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: adkpy/agents/design/Dockerfile
     container_name: presentationpro-design
     ports:
       - "10006:10006"
     environment:
       - A2A_PORT=10006
       - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_GENAI_API_KEY}
       - PUBLIC_URL=http://design:10006
       - ARANGODB_URL=http://arangodb:8529
       - ARANGODB_USER=root
@@ -214,21 +222,22 @@ services:
       - backend-network
       - database-network
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:10006/health')\""]
+      test: ["CMD-SHELL", "python -c \"import socket;s=socket.create_connection(('localhost', 10006), timeout=5);s.close()\""]
       interval: 30s
       timeout: 5s
       retries: 3
 
   script-writer:
     build:
-      context: ./adkpy/agents/script_writer
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: adkpy/agents/script_writer/Dockerfile
     container_name: presentationpro-script-writer
     ports:
       - "10007:10007"
     environment:
       - A2A_PORT=10007
       - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_GENAI_API_KEY}
       - PUBLIC_URL=http://script-writer:10007
       - ARANGODB_URL=http://arangodb:8529
       - ARANGODB_USER=root
@@ -238,21 +247,22 @@ services:
       - backend-network
       - database-network
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:10007/health')\""]
+      test: ["CMD-SHELL", "python -c \"import socket;s=socket.create_connection(('localhost', 10007), timeout=5);s.close()\""]
       interval: 30s
       timeout: 5s
       retries: 3
 
   research:
     build:
-      context: ./adkpy/agents/research
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: adkpy/agents/research/Dockerfile
     container_name: presentationpro-research
     ports:
       - "10008:10008"
     environment:
       - A2A_PORT=10008
       - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_GENAI_API_KEY}
       - PUBLIC_URL=http://research:10008
       - ARANGODB_URL=http://arangodb:8529
       - ARANGODB_USER=root
@@ -262,7 +272,7 @@ services:
       - backend-network
       - database-network
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:10008/health')\""]
+      test: ["CMD-SHELL", "python -c \"import socket;s=socket.create_connection(('localhost', 10008), timeout=5);s.close()\""]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -283,7 +293,7 @@ services:
     networks:
       - backend-network
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:9170/mcp')\""]
+      test: ["CMD-SHELL", "python -c \"import socket;s=socket.create_connection(('localhost', 9170), timeout=5);s.close()\""]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -291,14 +301,15 @@ services:
   # Orchestrate Agent (A2A coordinator)
   orchestrate:
     build:
-      context: ./adkpy/agents/orchestrate
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: adkpy/agents/orchestrate/Dockerfile
     container_name: presentationpro-orchestrate
     ports:
       - "10000:10000"
     environment:
       - PORT=10000
       - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_GENAI_API_KEY}
       - REMOTE_AGENT_ADDRESSES=http://clarifier:10001,http://outline:10002,http://slide-writer:10003,http://critic:10004,http://notes-polisher:10005,http://design:10006,http://script-writer:10007,http://research:10008
     depends_on:
       - clarifier
@@ -312,7 +323,7 @@ services:
     networks:
       - backend-network
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:10000/health')\""]
+      test: ["CMD-SHELL", "python -c \"import pathlib; pathlib.Path('/app/adkpy/agents/orchestrate').exists()\""]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -327,6 +338,7 @@ services:
       - "8100:8100"
     environment:
       - GOOGLE_GENAI_API_KEY=${GOOGLE_GENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_GENAI_API_KEY}
     depends_on:
       - clarifier
       - outline
@@ -358,7 +370,7 @@ services:
     networks:
       - database-network
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import os,base64,urllib.request; pwd=os.environ.get('ARANGO_ROOT_PASSWORD', 'root'); creds=('root:%s')%pwd; req=urllib.request.Request('http://localhost:8529/_api/version'); req.add_header('Authorization', 'Basic ' + base64.b64encode(creds.encode()).decode()); urllib.request.urlopen(req)\""]
+      test: ["CMD-SHELL", "arangosh --server.endpoint tcp://127.0.0.1:8529 --server.username root --server.password ${ARANGO_ROOT_PASSWORD:-root} --server.database _system --server.request-timeout 5 --javascript.execute-string \"db._version();\""]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -375,3 +387,5 @@ volumes:
   arangodb-data:
   arangodb-apps:
   uploads-data:
+
+

@@ -159,7 +159,7 @@ class ArangoGraphRAGTool:
     bind_vars = {"pid": presentation_id, "q": query, "limit": max(limit * 3, limit)}
 
     seeded: List[RetrievedChunk] = []
-    advanced_aql = f"""
+    advanced_aql = """
     FOR d IN {view}
       SEARCH d.presentationId == @pid AND MIN_MATCH(
         BOOST(ANALYZER(PHRASE(d.text, @q), 'text_en'), 1.3),
@@ -169,15 +169,15 @@ class ArangoGraphRAGTool:
       SORT BM25(d) DESC, TFIDF(d) DESC
       LIMIT @limit
       LET source = DOCUMENT('chunks', d._key)
-      RETURN {
+      RETURN {{
         "key": d._key,
         "name": source.name,
         "text": source.text,
-        "url": source.get('url'),
-        "embedding": source.get('embedding'),
+        "url": source.url,
+        "embedding": source.embedding,
         "score": BM25(d)
-      }
-    """
+      }}
+    """.format(view=view)
 
     try:
       rows = list(self.db.aql.execute(advanced_aql, bind_vars=bind_vars))
@@ -187,21 +187,21 @@ class ArangoGraphRAGTool:
     except Exception:
       seeded = []
 
-    simple_aql = f"""
+    simple_aql = """
     FOR d IN {view}
       SEARCH d.presentationId == @pid AND ANALYZER(d.text IN TOKENS(@q, 'text_en'), 'text_en')
       SORT BM25(d) DESC
       LIMIT @limit
       LET source = DOCUMENT('chunks', d._key)
-      RETURN {
+      RETURN {{
         "key": d._key,
         "name": source.name,
         "text": source.text,
-        "url": source.get('url'),
-        "embedding": source.get('embedding'),
+        "url": source.url,
+        "embedding": source.embedding,
         "score": BM25(d)
-      }
-    """
+      }}
+    """.format(view=view)
 
     rows = list(self.db.aql.execute(simple_aql, bind_vars=bind_vars))
     ranked = self._rerank(rows, query, limit)

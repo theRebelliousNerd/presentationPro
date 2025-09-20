@@ -1,0 +1,102 @@
+agents:
+  clarifier:
+    description: Refines presentation goals through dialogue.
+    service: clarifier
+    port: 10001
+    url_env: CLARIFIER_URL
+    dependencies:
+      - graph_rag.read
+    tools:
+      - analyze_context
+      - generate_question
+      - summarize_goals
+  outline:
+    description: Drafts the presentation outline from clarified goals.
+    service: outline
+    port: 10002
+    url_env: OUTLINE_URL
+    dependencies:
+      - graph_rag.read
+    tools:
+      - generate_outline
+  slide_writer:
+    description: Produces slides for each outline section with citations.
+    service: slide_writer
+    port: 10003
+    url_env: SLIDE_WRITER_URL
+    dependencies:
+      - graph_rag.read
+    tools:
+      - compose_slide
+  critic:
+    description: Reviews slides for factual grounding and quality.
+    service: critic
+    port: 10004
+    url_env: CRITIC_URL
+    dependencies:
+      - graph_rag.read
+    tools:
+      - critique_slide
+  notes_polisher:
+    description: Polishes speaker notes with actionable delivery guidance.
+    service: notes_polisher
+    port: 10005
+    url_env: NOTES_POLISHER_URL
+    dependencies:
+      - graph_rag.read
+    tools:
+      - polish_notes
+  design:
+    description: Applies PresentationPro visual system and accessibility checks.
+    service: design
+    port: 10006
+    url_env: DESIGN_URL
+    dependencies:
+      - graph_rag.read
+      - vision.mcp
+    tools:
+      - apply_theme
+      - analyze_layout
+  script_writer:
+    description: Generates full presentation script aligned with slides.
+    service: script_writer
+    port: 10007
+    url_env: SCRIPT_WRITER_URL
+    dependencies:
+      - graph_rag.read
+    tools:
+      - draft_script
+  research:
+    description: Enriches content with external and RAG-backed findings.
+    service: research
+    port: 10008
+    url_env: RESEARCH_URL
+    dependencies:
+      - graph_rag.read
+      - web.search
+    tools:
+      - gather_research
+  orchestrate:
+    description: Parent workflow agent coordinating all sub-agents.
+    service: orchestrate
+    port: 10000
+    url_env: ORCHESTRATE_URL
+    dependencies:
+      - graph_rag.read
+      - graph_rag.write
+      - workflow.tools
+    tools:
+      - sequential_workflow
+shared_tools:
+  graph_rag:
+    ingest: graph_rag.ingest
+    retrieve: graph_rag.retrieve
+  workflow:
+    evaluate_quality: workflow.evaluate_quality
+    finalize_payload: workflow.finalize_payload
+settings:
+  graph_rag:
+    database_url_env: ARANGODB_URL
+    database_name_env: ARANGODB_DB
+    credentials_env: ARANGO_ROOT_PASSWORD
+    default_retrieve_limit: 6

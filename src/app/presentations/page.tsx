@@ -57,7 +57,20 @@ export default function PresentationsPage() {
                 <CardContent className="flex items-center justify-between">
                   <div className="text-xs text-muted-foreground">{it.updated_at ? new Date(it.updated_at).toLocaleString() : ''}</div>
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={()=>{ try{ localStorage.setItem('presentationId', it.presentation_id) } catch {}; router.push('/') }}>Open</Button>
+                    <Button size="sm" variant="outline" onClick={async ()=>{
+                      try{
+                        // Clear any existing state to prevent conflicts
+                        localStorage.removeItem('appState');
+                        localStorage.removeItem('presentationDoc');
+                        // Set the new presentation ID
+                        localStorage.setItem('presentationId', it.presentation_id);
+                        console.log('Loading presentation:', it.presentation_id);
+                      } catch(e) {
+                        console.error('Failed to set presentation ID:', e);
+                      }
+                      // Use window.location to ensure full page reload with new state
+                      window.location.href = `/?id=${it.presentation_id}`;
+                    }}>Open</Button>
                   </div>
                 </CardContent>
               </Card>

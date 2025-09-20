@@ -6,7 +6,7 @@ allowing a web application to drive the presentation generation workflow.
 Now includes ADK Dev UI for agent testing and development.
 """
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Any, Dict
@@ -40,6 +40,7 @@ from tools import (
     VisionContrastTool, VisionAnalyzeInput, VisionAnalyzeOutput
 )
 from tools.web_search_tool import set_global_cache_config, clear_global_cache
+from .workflow_runner import WorkflowRunner
 from app.design_sanitize import (
     validate_html, validate_css, validate_svg,
     sanitize_html, sanitize_css, sanitize_svg,
@@ -159,6 +160,93 @@ except Exception as e:
     graph_rag_tool = _NoopRAG()
 
 # --- Core Presentation Workflow Endpoints ---
+
+workflow_runner = WorkflowRunner()
+
+
+async def _run_named_workflow(payload: Dict[str, Any], workflow_id: str):
+    body = payload or {}
+    body["workflowId"] = workflow_id
+    return await workflow_runner.run(app, body)
+
+
+@app.post("/v1/workflow/presentation")
+async def run_workflow_presentation(payload: Dict[str, Any]):
+    """Execute the full presentation workflow orchestrated on the server."""
+    try:
+        result = await workflow_runner.run(app, payload or {})
+        return {
+            "sessionId": result.get("sessionId") or result.get("session_id"),
+            "state": result.get("state"),
+            "final": result.get("final"),
+            "trace": result.get("trace", []),
+        }
+    except Exception as exc:
+        logger.error("Workflow execution failed: %s", exc)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/v1/workflow/design-refresh")
+async def run_workflow_design_refresh(payload: Dict[str, Any]):
+    try:
+        result = await _run_named_workflow(payload, "design_refresh_workflow")
+        return {
+            "sessionId": result.get("sessionId") or result.get("session_id"),
+            "state": result.get("state"),
+            "final": result.get("final"),
+            "trace": result.get("trace", []),
+        }
+    except Exception as exc:
+        logger.error("Design refresh workflow failed: %s", exc)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/v1/workflow/evidence-sweep")
+async def run_workflow_evidence_sweep(payload: Dict[str, Any]):
+    try:
+        result = await _run_named_workflow(payload, "evidence_sweep_workflow")
+        return {
+            "state": result.get("state"),
+            "final": result.get("final"),
+            "trace": result.get("trace", []),
+        }
+    except Exception as exc:
+        logger.error("Evidence sweep workflow failed: %s", exc)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/v1/workflow/research-prep")
+async def run_workflow_research_prep(payload: Dict[str, Any]):
+    try:
+        result = await _run_named_workflow(payload, "research_prep_workflow")
+        return {
+            "state": result.get("state"),
+            "final": result.get("final"),
+            "trace": result.get("trace", []),
+        }
+    except Exception as exc:
+        logger.error("Research prep workflow failed: %s", exc)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/v1/workflow/regression-validation")
+async def run_workflow_regression_validation(payload: Dict[str, Any]):
+    try:
+        result = await _run_named_workflow(payload, "regression_validation_workflow")
+        return {
+            "state": result.get("state"),
+            "final": result.get("final"),
+            "trace": result.get("trace", []),
+        }
+    except Exception as exc:
+        logger.error("Regression validation workflow failed: %s", exc)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(exc))
+
 
 @app.post("/v1/clarify")
 async def clarify(data: ClarifierInput, request: Request):
@@ -373,13 +461,48 @@ async def critique_slide(data: CriticInput, request: Request):
 
 
 VISION_TOOL_MAP: Dict[str, str] = {
+    # Critic tools (image quality assessment)
     '/v1/visioncv/blur': 'critic.assess_blur',
     '/v1/vision/analyze': 'critic.color_contrast',
+    '/v1/visioncv/noise': 'critic.measure_noise',
+    '/v1/visioncv/contrast_ratio': 'critic.check_color_contrast_ratio',
+
+    # Design tools (visual design and layout)
+    '/v1/visioncv/saliency': 'design.saliency_spectral',  # Using spectral (advanced), not basic saliency_map
+    '/v1/visioncv/saliency_basic': 'design.saliency_map',  # DEPRECATED - kept for backward compatibility only
+    '/v1/visioncv/empty_regions': 'design.find_empty_regions',
+    '/v1/visioncv/placement': 'design.suggest_placement',
+    '/v1/visioncv/palette': 'design.extract_palette',
+    '/v1/visioncv/procedural_texture': 'design.generate_procedural_texture',
+
+    # Research tools (data extraction and OCR)
+    '/v1/visioncv/ocr': 'research.ocr_extract',
+    '/v1/visioncv/bar_chart': 'research.extract_data_from_bar_chart',
+    '/v1/visioncv/line_graph': 'research.extract_data_from_line_graph',
+
+    # Brand tools (logo and color validation)
+    '/v1/visioncv/logo': 'brand.detect_logo',
+    '/v1/visioncv/brand_colors': 'brand.validate_brand_colors',
+
+    # Tool listing endpoint
+    '/v1/visioncv/tools': None,  # Special case - uses list_tools instead
 }
 
 async def _visioncv_call_http(path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     vision_url = os.environ.get('VISIONCV_URL')
     tool_name = VISION_TOOL_MAP.get(path)
+
+    # Special case: tools listing endpoint uses list_tools instead of call_tool
+    if path == '/v1/visioncv/tools' and vision_url:
+        try:
+            from shared.visioncv_client import list_tools as _vc_list
+            result = await asyncio.to_thread(_vc_list)
+            if isinstance(result, (list, dict)):
+                return result if isinstance(result, dict) else {"tools": result}
+        except Exception as exc:
+            logger.warning(f"VisionCV list_tools failed: {exc}")
+
+    # Primary method: Use VisionCV MCP client for tool calls
     if vision_url and tool_name:
         try:
             from shared.visioncv_client import call_tool as _vc_call
@@ -389,17 +512,37 @@ async def _visioncv_call_http(path: str, payload: Dict[str, Any]) -> Dict[str, A
                 return result
         except Exception as exc:
             logger.warning(f"VisionCV MCP call failed for {tool_name}: {exc}")
+
+    # Fallback 1: Direct HTTP call to VisionCV service
+    visioncv_base_url = os.environ.get('VISIONCV_URL', 'http://visioncv:9170/mcp')
+    if visioncv_base_url and (tool_name or path == '/v1/visioncv/tools'):
+        try:
+            # Remove /mcp suffix if present for direct tool calls
+            base_url = visioncv_base_url.replace('/mcp', '').rstrip('/')
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                r = await client.post(f"{base_url}{path}", json=payload)
+                r.raise_for_status()
+                return r.json()
+        except Exception as exc:
+            logger.warning(f"VisionCV direct HTTP call failed: {exc}")
+
+    # Fallback 2: Use ADK_BASE_URL only if it's different from current service
     base = os.environ.get('ADK_BASE_URL')
-    if base:
-        base_url = base.rstrip('/')
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            r = await client.post(f"{base_url}{path}", json=payload)
-            r.raise_for_status()
-            return r.json()
-    async with httpx.AsyncClient(app=app, base_url='http://vision-proxy.local', timeout=10.0) as client:
-        r = await client.post(path, json=payload)
-        r.raise_for_status()
-        return r.json()
+    if base and base != f"http://{os.environ.get('HOSTNAME', 'localhost')}:8088":
+        try:
+            base_url = base.rstrip('/')
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                r = await client.post(f"{base_url}{path}", json=payload)
+                r.raise_for_status()
+                return r.json()
+        except Exception as exc:
+            logger.warning(f"ADK fallback call failed: {exc}")
+
+    # Final fallback: Return error instead of invalid proxy
+    raise HTTPException(
+        status_code=503,
+        detail=f"VisionCV service unavailable. Tool '{tool_name or 'unknown'}' for path '{path}' could not be reached."
+    )
 
 @app.post("/v1/slide/polish_notes")
 async def polish_notes(data: NotesPolisherInput, request: Request):
@@ -1185,3 +1328,64 @@ async def arango_slide_use_asset(presentation_id: str, slide_index: int, body: S
         return { 'success': True, 'data': { 'from': slide.get('_id'), 'to': asset.get('_id') } }
     except Exception as e:
         return { 'success': False, 'error': str(e) }
+@app.post("/v1/workflow/design-refresh")
+async def run_workflow_design_refresh(payload: Dict[str, Any]):
+    try:
+        result = await _run_named_workflow(payload, "design_refresh_workflow")
+        return {
+            "sessionId": result.get("sessionId") or result.get("session_id"),
+            "state": result.get("state"),
+            "final": result.get("final"),
+            "trace": result.get("trace", []),
+        }
+    except Exception as exc:
+        logger.error("Design refresh workflow failed: %s", exc)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/v1/workflow/evidence-sweep")
+async def run_workflow_evidence_sweep(payload: Dict[str, Any]):
+    try:
+        result = await _run_named_workflow(payload, "evidence_sweep_workflow")
+        return {
+            "state": result.get("state"),
+            "final": result.get("final"),
+            "trace": result.get("trace", []),
+        }
+    except Exception as exc:
+        logger.error("Evidence sweep workflow failed: %s", exc)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/v1/workflow/research-prep")
+async def run_workflow_research_prep(payload: Dict[str, Any]):
+    try:
+        result = await _run_named_workflow(payload, "research_prep_workflow")
+        return {
+            "state": result.get("state"),
+            "final": result.get("final"),
+            "trace": result.get("trace", []),
+        }
+    except Exception as exc:
+        logger.error("Research prep workflow failed: %s", exc)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/v1/workflow/regression-validation")
+async def run_workflow_regression_validation(payload: Dict[str, Any]):
+    try:
+        result = await _run_named_workflow(payload, "regression_validation_workflow")
+        return {
+            "state": result.get("state"),
+            "final": result.get("final"),
+            "trace": result.get("trace", []),
+        }
+    except Exception as exc:
+        logger.error("Regression validation workflow failed: %s", exc)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(exc))
+
+

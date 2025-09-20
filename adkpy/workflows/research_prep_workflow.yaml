@@ -1,0 +1,40 @@
+
+id: research_prep_workflow
+version: 0.1.0
+description: Prepare research highlights and talking points before clarification.
+state_model: adkpy.schemas.workflow_state.PresentationWorkflowState
+metadata:
+  owner: presentationpro
+  tags:
+    - research
+steps:
+  - id: ingest_assets
+    type: tool
+    name: graph_rag.ingest
+    description: Ingest any newly uploaded assets for analysis.
+    input:
+      presentation_id: ${inputs.presentationId}
+      assets: ${inputs.newFiles}
+    on_success:
+      mutate_state: cache_ingest_summary
+
+  - id: background_research
+    type: agent
+    name: research
+    description: Generate background findings for the presentation topic.
+    input:
+      presentationId: ${inputs.presentationId}
+      query: ${inputs.initialInput.text}
+      history: ${inputs.history}
+    on_success:
+      mutate_state: append_research_findings
+
+  - id: summarize_research
+    type: tool
+    name: workflow.prepare_research_summary
+    description: Package findings for downstream agents.
+    input:
+      state: ${state}
+    on_success:
+      mutate_state: set_final_response
+

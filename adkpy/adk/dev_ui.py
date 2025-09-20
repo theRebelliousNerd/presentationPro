@@ -95,11 +95,12 @@ def get_dev_ui_server(
                 }
                 textarea {
                     width: 100%;
-                    min-height: 100px;
+                    min-height: 140px;
                     padding: 10px;
                     border: 1px solid #ddd;
                     border-radius: 4px;
                     font-family: monospace;
+                    background: #fbfbfb;
                 }
                 button {
                     background: #4CAF50;
@@ -113,7 +114,7 @@ def get_dev_ui_server(
                 button:hover {
                     background: #45a049;
                 }
-                .response {
+                .response, .workflow-status {
                     background: #f0f0f0;
                     padding: 10px;
                     border-radius: 4px;
@@ -121,14 +122,35 @@ def get_dev_ui_server(
                     white-space: pre-wrap;
                     font-family: monospace;
                 }
+                .workflow-trace {
+                    margin-top: 12px;
+                }
+                .trace-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 0.85em;
+                }
+                .trace-table th, .trace-table td {
+                    border: 1px solid #e0e0e0;
+                    padding: 6px 8px;
+                    text-align: left;
+                }
+                .trace-table th {
+                    background: #f7f7f7;
+                }
+                .hint {
+                    font-size: 0.9em;
+                    color: #555;
+                    margin-bottom: 8px;
+                }
             </style>
         </head>
         <body>
-            <h1>🤖 ADK Development UI</h1>
+            <h1>ADK Development UI</h1>
 
             <div class="container">
                 <h2>System Status</h2>
-                <p>Status: <span class="status">✓ Running</span></p>
+                <p>Status: <span class="status">Running</span></p>
                 <p>Agents Loaded: <span id="agent-count">0</span></p>
             </div>
 
@@ -140,6 +162,24 @@ def get_dev_ui_server(
                         <div class="agent-description">Please configure agents to see them here</div>
                     </li>
                 </ul>
+            </div>
+
+            <div class="container">
+                <h2>Presentation Workflow Runner</h2>
+                <p class="hint">Post to <code>/v1/workflow/presentation</code> and inspect the resulting trace, quality metadata, and final state.</p>
+                <textarea id="workflow-input" spellcheck="false">{
+  "presentationId": "workflow-demo",
+  "history": [],
+  "initialInput": {
+    "text": "Create a quick overview of our Q4 AI initiatives",
+    "audience": "executive",
+    "length": "short"
+  },
+  "newFiles": []
+}</textarea>
+                <button onclick="runWorkflow()">Run Workflow</button>
+                <div id="workflow-status" class="workflow-status"></div>
+                <div id="workflow-trace" class="workflow-trace"></div>
             </div>
 
             <div class="container">
@@ -176,9 +216,78 @@ def get_dev_ui_server(
                     const input = document.getElementById('test-input').value;
                     const responseDiv = document.getElementById('response');
 
-                    // Here you would send the test to your agents
-                    responseDiv.textContent = 'Test functionality coming soon...\\nInput received: ' + input;
+                    responseDiv.textContent = 'Test functionality coming soon...\nInput received: ' + input;
                     responseDiv.style.display = 'block';
+                }
+
+                async function runWorkflow() {
+                    const inputEl = document.getElementById('workflow-input');
+                    const statusEl = document.getElementById('workflow-status');
+                    const traceEl = document.getElementById('workflow-trace');
+                    let payload;
+                    try {
+                        payload = JSON.parse(inputEl.value);
+                    } catch (err) {
+                        statusEl.textContent = 'Invalid JSON payload';
+                        statusEl.style.background = '#fdecea';
+                        return;
+                    }
+
+                    statusEl.textContent = 'Running workflow...';
+                    statusEl.style.background = '#f0f0f0';
+                    traceEl.innerHTML = '';
+
+                    try {
+                        const res = await fetch('/v1/workflow/presentation', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        if (!res.ok) {
+                            const detail = await res.text();
+                            statusEl.textContent = `Request failed (${res.status}): ${detail}`;
+                            statusEl.style.background = '#fdecea';
+                            return;
+                        }
+                        const data = await res.json();
+                        renderWorkflow(data);
+                    } catch (err) {
+                        statusEl.textContent = 'Error: ' + err;
+                        statusEl.style.background = '#fdecea';
+                    }
+                }
+
+                function renderWorkflow(data) {
+                    const statusEl = document.getElementById('workflow-status');
+                    const traceEl = document.getElementById('workflow-trace');
+                    const finalStatus = (data.final && data.final.status) || 'complete';
+                    statusEl.style.background = finalStatus === 'complete' ? '#e8f5e9' : '#fff8e1';
+                    statusEl.textContent = `Session ${data.sessionId || 'n/a'} � Status: ${finalStatus}`;
+
+                    const trace = Array.isArray(data.trace) ? data.trace : [];
+                    if (!trace.length) {
+                        traceEl.innerHTML = '<p class="hint">No trace entries returned.</p>';
+                    } else {
+                        let rows = '<table class="trace-table"><thead><tr><th>Step</th><th>Type</th><th>Summary</th></tr></thead><tbody>';
+                        trace.forEach((step, idx) => {
+                            const keys = step && step.result ? Object.keys(step.result) : [];
+                            const summary = keys.length ? keys.slice(0, 4).join(', ') : 'ok';
+                            rows += `<tr><td>${step?.id || 'step-' + (idx + 1)}</td><td>${step?.type || 'step'}</td><td>${summary}</td></tr>`;
+                        });
+                        rows += '</tbody></table>';
+                        traceEl.innerHTML = rows;
+                    }
+
+                    if (data.state && data.state.metadata && Array.isArray(data.state.metadata.quality) && data.state.metadata.quality.length) {
+                        const quality = data.state.metadata.quality;
+                        const qualityList = quality.map((entry, idx) => {
+                            const missing = (entry.missingCitations || []).length;
+                            const violations = (entry.violations || []).length;
+                            return `<li>Snapshot ${idx + 1}: ${missing} missing citations, ${violations} violations</li>`;
+                        }).join('');
+                        const ul = `<div class="hint">Quality snapshots:</div><ul>${qualityList}</ul>`;
+                        traceEl.innerHTML += ul;
+                    }
                 }
             </script>
         </body>

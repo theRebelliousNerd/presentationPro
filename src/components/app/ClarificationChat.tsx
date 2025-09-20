@@ -4,7 +4,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription }
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, User, Bot, Loader2, Lightbulb } from 'lucide-react';
+import { Send, User, Bot, Loader2, Lightbulb, FastForward } from 'lucide-react';
 import { getClarification, ingestAssets } from '@/lib/actions';
 import { Presentation, ChatMessage, UploadedFileRef } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -41,6 +41,19 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { chatHistory, initialInput } = presentation;
+  const clarifyFinished = Boolean(presentation.workflowState?.clarify?.finished);
+
+  const mergeWorkflowMeta = (prev: Presentation, meta: { workflowSessionId?: string; workflowState?: any; workflowTrace?: any[] }): Presentation => {
+    const next = { ...prev };
+    if (meta.workflowSessionId) {
+      next.workflowSessionId = meta.workflowSessionId;
+    }
+    if (meta.workflowState !== undefined) {
+      next.workflowState = meta.workflowState;
+    }
+    next.workflowTrace = meta.workflowTrace ?? next.workflowTrace ?? [];
+    return next;
+  };
 
   const scrollToBottom = () => {
     if (scrollAreaRef.current) {
@@ -51,151 +64,94 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
   useEffect(scrollToBottom, [chatHistory]);
 
   useEffect(() => {
+    if (clarifyFinished) {
+      setProgress(100);
+    }
+  }, [clarifyFinished]);
+
+  useEffect(() => {
     const getInitialMessage = async () => {
       if (chatHistory.length === 0) {
         setIsLoading(true);
         try {
-          const response = await getClarification([], initialInput, [], (presentation as any).id);
+          const response = await getClarification({
+
+            history: [],
+
+            initialInput,
+
+            newFiles: [],
+
+            presentationId: presentation.id,
+
+            sessionId: presentation.workflowSessionId,
+
+            workflowState: presentation.workflowState,
+
+          });
+
           const aiResponseContent = response.refinedGoals.trim();
-          const newAiMessage: ChatMessage = { id: nanoid(), role: 'model', content: aiResponseContent, createdAt: Date.now() };
-          setPresentation(prev => ({ ...prev, chatHistory: [newAiMessage] }));
-          // If backend returned a structured patch, merge into initialInput
-          const patch = (response as any).initialInputPatch as any;
-          if (patch && typeof patch === 'object') {
-            setPresentation(prev => ({ ...prev, initialInput: { ...prev.initialInput, ...patch } }));
-          }
-          // Telemetry
-          const usage = (response as any).usage;
-          if (usage) {
-            if (usage.promptTokens) addUsage({ model: usage.model || 'gemini-2.5-flash', kind: 'prompt', tokens: usage.promptTokens, at: Date.now() } as any);
-            if (usage.completionTokens) addUsage({ model: usage.model || 'gemini-2.5-flash', kind: 'completion', tokens: usage.completionTokens, at: Date.now() } as any);
-          }
-        } catch (error) {
-          console.error("Failed to get initial message:", error);
-          const errorMessage: ChatMessage = { id: nanoid(), role: 'model', content: 'Sorry, I encountered an error starting the chat. Please try refreshing.', createdAt: Date.now() };
-          setPresentation(prev => ({ ...prev, chatHistory: [errorMessage] }));
-        } finally {
-          setIsLoading(false);
-        }
-      }
-    };
-    if (presentation.id) { // Only run if presentation is loaded
-      getInitialMessage();
-    }
-  }, [presentation.id, setPresentation, initialInput]);
-
-  useEffect(() => {
-    const newProgress = Math.min(10 + chatHistory.length * 15, 85);
-    setProgress(newProgress);
-    
-    if (chatHistory.length < CONTEXT_SUGGESTIONS.length) {
-      setSuggestion(CONTEXT_SUGGESTIONS[chatHistory.length]);
-    } else {
-      setSuggestion(CONTEXT_SUGGESTIONS[CONTEXT_SUGGESTIONS.length - 1]);
-    }
-
-  }, [chatHistory]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if ((!input.trim() && newRawFiles.length === 0) || isLoading) return;
-    
-    setIsLoading(true);
-
-    let messageContent = input;
-    const uploadedFileInfos: UploadedFileRef[] = [];
-
-    if (newRawFiles.length > 0) {
-      const fileNames = newRawFiles.map(f => f.name).join(', ');
-      messageContent += `\n\n(Attached files: ${fileNames})`;
-
-      for (const file of newRawFiles) {
-        try {
-          const uploadedFile = await uploadFile(file);
-          uploadedFileInfos.push(uploadedFile);
-          // Ingest into orchestrator graph RAG (if enabled)
-          try {
-            if (presentation.id) {
-              await ingestAssets(presentation.id, [uploadedFile]);
-            }
-          } catch {}
-        } catch (error) {
-          console.error(`Failed to upload file ${file.name}:`, error);
-          setIsLoading(false);
-          return;
-        }
-      }
-    }
-
-    const newUserMessage: ChatMessage = { id: nanoid(), role: 'user', content: messageContent.trim(), createdAt: Date.now() };
-    const newHistory = [...chatHistory, newUserMessage];
-    setPresentation(prev => ({...prev, chatHistory: newHistory}));
-    setInput('');
-    setNewRawFiles([]);
-    
-    try {
-      // Estimate prompt tokens (user message only; system/context not included here)
-      if (messageContent.trim()) {
-        addUsage({ model: 'gemini-2.5-flash', kind: 'prompt', tokens: estimateTokens(messageContent) , at: Date.now() } as any);
-      }
-      const response = await getClarification(newHistory, initialInput, uploadedFileInfos, (presentation as any).id);
-      const aiResponseContent = response.refinedGoals.trim();
       const newAiMessage: ChatMessage = { id: nanoid(), role: 'model', content: aiResponseContent, createdAt: Date.now() };
 
-      setPresentation(prev => ({
-        ...prev, 
-        chatHistory: [...newHistory, newAiMessage],
-        initialInput: {
-          ...prev.initialInput,
-          files: [...prev.initialInput.files, ...uploadedFileInfos]
-        }
-      }));
-      // Merge any structured preference patch
-      const patch = (response as any).initialInputPatch as any;
-      if (patch && typeof patch === 'object') {
-        setPresentation(prev => ({ ...prev, initialInput: { ...prev.initialInput, ...patch } }));
-      }
-
-      // Optional: apply any file intents suggested by the agent
+      let intents: { name: string; intent: 'content'|'style'|'graphics'|'ignore'; notes?: string }[] | undefined;
       try {
-        const intents = (response as any).fileIntents as { name: string; intent: 'content'|'style'|'graphics'|'ignore'; notes?: string }[] | undefined;
-        if (Array.isArray(intents) && intents.length) {
-          setPresentation(prev => {
-            const allKnown = [...prev.initialInput.files, ...prev.initialInput.styleFiles, ...(prev.initialInput.graphicsFiles || []), ...uploadedFileInfos];
-            const byName = new Map<string, typeof allKnown[number]>(allKnown.map(f => [f.name, f]));
-            const files: typeof prev.initialInput.files = [];
-            const styleFiles: typeof prev.initialInput.styleFiles = [];
-            const graphicsFiles: typeof prev.initialInput.graphicsFiles = [];
-            // Start with existing, then re-assign by intents when provided
-            const pushUnique = (arr: any[], f: any) => { if (!arr.find(x => x.name === f.name)) arr.push(f) };
-            // Default: carry over existing
-            prev.initialInput.files.forEach(f => pushUnique(files, f));
-            prev.initialInput.styleFiles.forEach(f => pushUnique(styleFiles, f));
-            (prev.initialInput.graphicsFiles || []).forEach(f => pushUnique(graphicsFiles, f));
-            // Apply intents
-            for (const it of intents) {
-              const f = it && byName.get(it.name);
-              if (!f) continue;
-              // remove from all buckets
-              const rm = (arr: any[]) => arr.filter(x => x.name !== f.name);
-              const cat = it.intent;
-              // rebuild after removals
-              const nextFiles = rm(files);
-              const nextStyle = rm(styleFiles);
-              const nextGraphics = rm(graphicsFiles || []);
-              if (cat === 'content') pushUnique(nextFiles, f);
-              else if (cat === 'style') pushUnique(nextStyle, f);
-              else if (cat === 'graphics') pushUnique(nextGraphics, f);
-              // assign
-              (files as any) = nextFiles;
-              (styleFiles as any) = nextStyle;
-              (graphicsFiles as any) = nextGraphics;
-            }
-            return { ...prev, initialInput: { ...prev.initialInput, files, styleFiles, graphicsFiles } };
-          });
+        intents = (response as any).fileIntents;
+      } catch {
+        intents = undefined;
+      }
+      const patch = (response as any).initialInputPatch as any;
+
+      setPresentation(prev => {
+        let next = mergeWorkflowMeta(prev, response);
+        const nextInitial = { ...next.initialInput };
+        nextInitial.files = [...(nextInitial.files || []), ...uploadedFileInfos];
+        nextInitial.styleFiles = [...(nextInitial.styleFiles || [])];
+        nextInitial.graphicsFiles = [...(nextInitial.graphicsFiles || [])];
+
+        if (patch && typeof patch === 'object') {
+          Object.assign(nextInitial, patch);
+          nextInitial.files = nextInitial.files || [];
+          nextInitial.styleFiles = nextInitial.styleFiles || [];
+          nextInitial.graphicsFiles = nextInitial.graphicsFiles || [];
         }
-      } catch {}
-      
+
+        if (Array.isArray(intents) && intents.length) {
+          const byName = new Map<string, UploadedFileRef>([
+            ...((nextInitial.files || []).map(f => [f.name, f] as [string, UploadedFileRef])),
+            ...((nextInitial.styleFiles || []).map(f => [f.name, f] as [string, UploadedFileRef])),
+            ...((nextInitial.graphicsFiles || []).map(f => [f.name, f] as [string, UploadedFileRef])),
+            ...uploadedFileInfos.map(f => [f.name, f] as [string, UploadedFileRef]),
+          ]);
+          const pushUnique = (arr: UploadedFileRef[], file: UploadedFileRef) => {
+            if (!arr.find(x => x.name === file.name)) arr.push(file);
+          };
+          const removeFrom = (arr: UploadedFileRef[], name: string) => arr.filter(x => x.name !== name);
+          let files = [...(nextInitial.files || [])];
+          let styleFiles = [...(nextInitial.styleFiles || [])];
+          let graphicsFiles = [...(nextInitial.graphicsFiles || [])];
+          for (const it of intents) {
+            const file = it && byName.get(it.name);
+            if (!file) continue;
+            files = removeFrom(files, file.name);
+            styleFiles = removeFrom(styleFiles, file.name);
+            graphicsFiles = removeFrom(graphicsFiles, file.name);
+            if (it.intent === 'content') pushUnique(files, file);
+            else if (it.intent === 'style') pushUnique(styleFiles, file);
+            else if (it.intent === 'graphics') pushUnique(graphicsFiles, file);
+          }
+          nextInitial.files = files;
+          nextInitial.styleFiles = styleFiles;
+          nextInitial.graphicsFiles = graphicsFiles;
+        }
+
+        next = {
+          ...next,
+          chatHistory: [...newHistory, newAiMessage],
+          initialInput: nextInitial,
+        };
+        return next;
+      });
+
       if (response.finished) {
         setProgress(100);
         onClarificationComplete(aiResponseContent);
@@ -216,6 +172,79 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
     }
   };
 
+
+  const handleForceFinish = () => {
+    if (isLoading || clarifyFinished) return;
+    const confirmFinish = typeof window !== 'undefined' ? window.confirm('Skip clarifier and start building your presentation?') : true;
+    if (!confirmFinish) return;
+
+    const latestAssistant = [...chatHistory].reverse().find((message) => message.role === 'model');
+    const fallbackSummary = (latestAssistant?.content?.trim())
+      || (presentation.workflowState?.clarify?.refinedGoals && String(presentation.workflowState.clarify.refinedGoals).trim())
+      || (presentation.workflowState?.clarify?.response && String(presentation.workflowState.clarify.response).trim())
+      || presentation.initialInput?.text
+      || 'Ready to build the presentation.';
+
+    const forcedMessage: ChatMessage = {
+      id: nanoid(),
+      role: 'model',
+      content: "Understood. I'll start assembling your outline with this context.",
+      createdAt: Date.now(),
+    };
+
+    const traceEntry = {
+      id: `clarify-force-${Date.now()}`,
+      type: 'manual',
+      result: {
+        status: 'forced-finish',
+        summary: fallbackSummary,
+      },
+    } as any;
+
+    setProgress(100);
+    setSuggestion('');
+
+    setPresentation((prev) => {
+      const nextHistory = prev.chatHistory && prev.chatHistory.length
+        ? [...prev.chatHistory, forcedMessage]
+        : [forcedMessage];
+
+      const nextWorkflowState: any = {
+        ...(prev.workflowState ?? {}),
+        clarify: {
+          ...(prev.workflowState?.clarify ?? {}),
+          response: fallbackSummary,
+          refinedGoals: fallbackSummary,
+          finished: true,
+          forcedFinish: true,
+        },
+        final_response: {
+          status: 'forced_completion',
+          clarify: {
+            refinedGoals: fallbackSummary,
+            finished: true,
+            forcedFinish: true,
+          },
+        },
+        metadata: {
+          ...(prev.workflowState?.metadata ?? {}),
+          forcedFinishAt: new Date().toISOString(),
+        },
+      };
+
+      const nextTrace = [...(prev.workflowTrace ?? []), traceEntry];
+
+      return {
+        ...prev,
+        chatHistory: nextHistory,
+        workflowState: nextWorkflowState,
+        workflowTrace: nextTrace,
+      };
+    });
+
+    onClarificationComplete(fallbackSummary);
+  };
+
   const isChatReady = Boolean(presentation.id) && chatHistory.length > 0;
 
   return (
@@ -223,9 +252,21 @@ export default function ClarificationChat({ presentation, setPresentation, onCla
       <CardHeader className={compact ? "py-3" : undefined}>
         <div className="flex items-center justify-between">
           <CardTitle className={cn("font-headline", compact ? "text-lg" : "text-3xl")}>Refine Goals</CardTitle>
-          <FormsPreviewDialog presentation={presentation as any} setPresentation={setPresentation as any}>
-            <Button size="sm" variant="outline">Review Fields</Button>
-          </FormsPreviewDialog>
+          <div className="flex items-center gap-2">
+            <FormsPreviewDialog presentation={presentation as any} setPresentation={setPresentation as any}>
+              <Button size="sm" variant="outline">Review Fields</Button>
+            </FormsPreviewDialog>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={handleForceFinish}
+              disabled={isLoading || clarifyFinished || (!chatHistory.length && !presentation.workflowState?.clarify?.response)}
+              data-testid="clarifier-force-finish"
+            >
+              <FastForward className="h-4 w-4 mr-1" />
+              Skip Clarifier
+            </Button>
+          </div>
         </div>
         {!compact && (
           <CardDescription>

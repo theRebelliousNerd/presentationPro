@@ -1,0 +1,33 @@
+{
+  "name": "clarify_outline_critic_rag_smoke",
+  "description": "Ensures clarify -> outline -> critic stages ground responses in Graph RAG chunks",
+  "inputs": {
+    "presentationId": "test-presentation",
+    "initialInput": {
+      "text": "Create a deck about remote work culture for engineering managers",
+      "audience": "Engineering managers",
+      "tone": "Pragmatic",
+      "length": "10"
+    },
+    "history": [],
+    "newFiles": [
+      {
+        "name": "remote-culture.pdf",
+        "text": "Remote work culture emphasizes async communication, trust, and outcome-based measurement."
+      }
+    ]
+  },
+  "assertions": {
+    "clarify": {
+      "expects_finished": true,
+      "requires_response_contains": ["remote work", "engineering managers"]
+    },
+    "outline": {
+      "min_sections": 4,
+      "requires_keyword": "Remote"
+    },
+    "critic": {
+      "max_missing_citations": 0
+    }
+  }
+}

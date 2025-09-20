@@ -1,0 +1,91 @@
+
+id: design_refresh_workflow
+version: 0.1.0
+description: Refresh slide visuals by re-running design tokens and critic checks without regenerating content.
+state_model: adkpy.schemas.workflow_state.PresentationWorkflowState
+metadata:
+  owner: presentationpro
+  tags:
+    - design
+    - parallel
+steps:
+  - id: load_slides
+    type: tool
+    name: workflow.load_slides
+    description: Normalize incoming slide payloads into workflow state.
+    input:
+      slides: ${inputs.slides}
+    on_success:
+      mutate_state: set_slides
+
+  - id: slide_design
+    type: parallel
+    name: slide_design
+    description: Re-apply design tokens and asset prompts for each slide.
+    foreach: ${state.slides}
+    workflow:
+      id: design_refresh_per_slide
+      type: sequential
+      steps:
+        - id: select_design_tokens
+          type: tool
+          name: workflow.map_design_tokens
+          input:
+            initialInput: ${inputs.initialInput}
+            slide: ${item}
+        - id: design_slide
+          type: agent
+          name: design
+          description: Produce refreshed background layers using tokens.
+          input:
+            slide: ${item}
+            theme: ${steps.select_design_tokens.result.background}
+            pattern: ${steps.select_design_tokens.result.pattern}
+            overlay: ${steps.select_design_tokens.result.overlay}
+            layout: ${steps.select_design_tokens.result.layout}
+        - id: store_design
+          type: tool
+          name: workflow.prepare_design_payload
+          input:
+            slideId: ${item.id}
+            designResponse: ${steps.design_slide.result}
+            tokens: ${steps.select_design_tokens.result}
+            presentationId: ${inputs.presentationId}
+          on_success:
+            mutate_state: merge_design
+
+  - id: slide_review
+    type: parallel
+    name: slide_review
+    description: Run the critic agent in design mode to flag contrast issues.
+    foreach: ${state.slides}
+    workflow:
+      id: design_review_per_slide
+      type: sequential
+      steps:
+        - id: critique_slide
+          type: agent
+          name: critic
+          input:
+            slide: ${item}
+            assets: ${inputs.newFiles}
+            mode: design
+        - id: store_critic_feedback
+          type: tool
+          name: workflow.prepare_critic_payload
+          input:
+            slideId: ${item.id}
+            critique: ${steps.critique_slide.result}
+          on_success:
+            mutate_state: merge_critic_feedback
+
+  - id: finalize_payload
+    type: tool
+    name: workflow.finalize_payload
+    description: Assemble the refreshed slides for the caller.
+    input:
+      slides: ${state.slides}
+      script: ${state.script}
+      ragContext: ${state.rag}
+    on_success:
+      mutate_state: set_final_response

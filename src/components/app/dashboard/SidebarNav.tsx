@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { Home, Presentation, BookText, Settings as SettingsIcon, PanelLeftOpen, PanelLeftClose, Wrench } from 'lucide-react'
+import { Home, Presentation, BookText, Settings as SettingsIcon, PanelLeftOpen, PanelLeftClose, Wrench, GitBranch } from 'lucide-react'
 import SettingsDialog from '@/components/app/SettingsDialog'
 import { useEffect, useState } from 'react'
 
@@ -23,7 +23,7 @@ const items: NavItem[] = [
 
 export default function SidebarNav() {
   const pathname = usePathname()
-  const [activePanel, setActivePanel] = useState<null | 'chat' | 'reviews'>(null)
+  const [activePanel, setActivePanel] = useState<null | 'chat' | 'reviews' | 'workflow'>(null)
   const [slidesCollapsed, setSlidesCollapsed] = useState<boolean>(false)
   useEffect(() => {
     const onState = (e: any) => {
@@ -86,6 +86,22 @@ export default function SidebarNav() {
           ) : null}
         </span>
         <span className="hidden xl:block">Chat</span>
+      </button>
+      <button
+        className={cn('flex flex-col items-center gap-1 text-xs px-2 py-1 rounded-md hover:bg-muted transition', activePanel==='workflow' && 'bg-muted text-primary')}
+        title="Workflow"
+        aria-label="Workflow"
+        onClick={()=>{
+          try { window.dispatchEvent(new CustomEvent('panel:toggle', { detail: { panel: 'workflow' } })) } catch {}
+        }}
+      >
+        <span className="relative inline-flex items-center justify-center h-5 w-5 rounded bg-muted">
+          <GitBranch className="h-4 w-4" />
+          {activePanel==='workflow' ? (
+            <span className="absolute -right-1 -top-1 h-4 w-4 text-[10px] rounded-full bg-destructive text-destructive-foreground flex items-center justify-center" onClick={(e)=>{ e.stopPropagation(); try { window.dispatchEvent(new CustomEvent('panel:toggle', { detail: { panel: 'workflow' } })) } catch {} }}>x</span>
+          ) : null}
+        </span>
+        <span className="hidden xl:block">Workflow</span>
       </button>
       <button
         className={cn('flex flex-col items-center gap-1 text-xs px-2 py-1 rounded-md hover:bg-muted transition', activePanel==='reviews' && 'bg-muted text-primary')}

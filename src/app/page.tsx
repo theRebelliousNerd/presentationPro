@@ -19,8 +19,12 @@ import ClarificationChat from '@/components/app/ClarificationChat';
 import PanelController from '@/components/app/PanelController';
 import { Button } from '@/components/ui/button';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 
 export default function Home() {
+  const searchParams = useSearchParams();
+  const presentationIdFromUrl = searchParams.get('id');
+
   const {
     isLoaded,
     appState,
@@ -31,7 +35,19 @@ export default function Home() {
     uploadFile,
     duplicatePresentation,
     saveNow,
-  } = usePresentationState();
+  } = usePresentationState(presentationIdFromUrl || undefined);
+
+  const mergeWorkflowMeta = (prev: Presentation, meta: { workflowSessionId?: string; workflowState?: any; workflowTrace?: any[] }) => {
+    const next = { ...prev };
+    if (meta.workflowSessionId) {
+      next.workflowSessionId = meta.workflowSessionId;
+    }
+    if (meta.workflowState !== undefined) {
+      next.workflowState = meta.workflowState;
+    }
+    next.workflowTrace = meta.workflowTrace ?? next.workflowTrace ?? [];
+    return next;
+  };
 
   const [genProgress, setGenProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
   const cancelGenerationRef = useRef(false);
@@ -73,6 +89,9 @@ export default function Home() {
     setGenProgress({ current: 0, total: outline.length });
     try {
       const generated: Slide[] = [];
+      let workflowSessionId = presentation.workflowSessionId;
+      let workflowState = presentation.workflowState;
+      let workflowTrace = presentation.workflowTrace;
       for (let i = 0; i < outline.length; i++) {
         if (cancelGenerationRef.current) break;
         const title = outline[i];
@@ -88,18 +107,37 @@ export default function Home() {
           mustInclude: presentation.initialInput.mustInclude,
           mustAvoid: presentation.initialInput.mustAvoid,
         } as any;
-        const [slide] = await generateSlideContent({ outline: [title], assets, constraints });
-        const withId: Slide = { ...slide, id: nanoid(), imageState: 'done', useGeneratedImage: false };
-        if ((slide as any).useAssetImageUrl) {
-          withId.imageUrl = (slide as any).useAssetImageUrl;
-          withId.assetImageUrl = (slide as any).useAssetImageUrl;
+        const slideResult = await generateSlideContent({
+          outline: [title],
+          assets,
+          constraints,
+          presentationId: presentation.id,
+          sessionId: workflowSessionId,
+          workflowState,
+        });
+        workflowSessionId = slideResult.workflowSessionId || workflowSessionId;
+        workflowState = slideResult.workflowState ?? workflowState;
+        workflowTrace = slideResult.workflowTrace ?? workflowTrace;
+
+        const baseSlide = (slideResult.slides && slideResult.slides[0]) || { title, content: [], speakerNotes: '', imagePrompt: '' } as any;
+        const withId: Slide = { ...{ title, content: [], speakerNotes: '', imagePrompt: '' }, ...baseSlide, id: nanoid() };
+        withId.imagePrompt = withId.imagePrompt || '';
+        withId.imageUrl = withId.imageUrl || baseSlide.imageUrl || baseSlide.image_url || withId.assetImageUrl || undefined;
+        withId.imageState = baseSlide.imageState || 'done';
+        withId.useGeneratedImage = baseSlide.useGeneratedImage ?? !withId.imageUrl;
+        if ((baseSlide as any).useAssetImageUrl) {
+          withId.imageUrl = (baseSlide as any).useAssetImageUrl;
+          withId.assetImageUrl = (baseSlide as any).useAssetImageUrl;
           withId.useGeneratedImage = false;
           withId.imageState = 'done';
         }
         generated.push(withId);
-        const completionText = [slide.title, ...(slide.content||[]), slide.speakerNotes].join('\n');
+        const completionText = [withId.title, ...(withId.content || []), withId.speakerNotes || ''].join('\n');
         addUsage({ model: 'gemini-2.5-flash', kind: 'completion', tokens: estimateTokens(completionText), at: Date.now() } as any);
-        setPresentation(prev => ({ ...prev, slides: [...generated] }));
+        setPresentation(prev => {
+          const next = mergeWorkflowMeta(prev, { workflowSessionId, workflowState, workflowTrace });
+          return { ...next, slides: [...generated] };
+        });
         setGenProgress({ current: i + 1, total: outline.length });
       }
       setAppState('editing');
@@ -126,6 +164,11 @@ export default function Home() {
       case 'approving':
         return <OutlineApproval
           clarifiedGoals={presentation.clarifiedGoals}
+          initialInput={presentation.initialInput}
+          presentationId={presentation.id}
+          sessionId={presentation.workflowSessionId}
+          workflowState={presentation.workflowState}
+          onWorkflowMeta={(meta) => setPresentation(prev => mergeWorkflowMeta(prev, meta))}
           onApprove={handleOutlineApproved}
           onGoBack={() => setAppState('clarifying')}
           />;

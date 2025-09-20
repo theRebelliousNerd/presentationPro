@@ -16,6 +16,36 @@ export type Slide = {
   useGeneratedImage?: boolean;
   assetImageUrl?: string;
   designCode?: { css?: string; svg?: string };
+  // Quality metrics from VisionCV
+  qualityMetrics?: {
+    overall?: number;
+    contrast?: {
+      score: number;
+      ratio: number;
+      passes: boolean;
+      level?: 'AA' | 'AAA' | 'AA-large';
+    };
+    blur?: {
+      score: number;
+      level: number;
+      passes: boolean;
+    };
+    saliency?: {
+      score: number;
+      hotspots: number;
+      distribution: 'concentrated' | 'balanced' | 'scattered';
+    };
+    brand?: {
+      score: number;
+      violations: string[];
+      passes: boolean;
+    };
+    placement?: {
+      score: number;
+      confidence: number;
+      suggestions: number;
+    };
+  };
   // New structured spec for HTML/CSS/SVG-driven designs
   designSpec?: {
     tokens?: {
@@ -52,7 +82,33 @@ export type Slide = {
       area?: number;
     }>;
     placementFrame?: { width: number; height: number };
+    selectedPlacement?: number; // Index of selected placement candidate
+    appliedPlacement?: { // The actually applied placement
+      bounding_box?: { x?: number; y?: number; width?: number; height?: number };
+      score?: number;
+      mean_saliency?: number;
+      thirds_distance?: number;
+      area?: number;
+    };
   };
+  design?: {
+    tokens?: Record<string, string>;
+    layers?: Array<{ kind?: string; token?: string; css?: string; columns?: number; gutter?: string; weights?: number[] }>;
+    image?: { url?: string; prompt?: string; path?: string };
+    type?: string;
+    prompt?: string;
+  };
+  qualityMeta?: {
+    overallScore?: number;
+    accessibilityScore?: number;
+    brandScore?: number;
+    clarityScore?: number;
+    issuesFound?: string[];
+    fixesApplied?: string[];
+    requiresManualReview?: boolean;
+    qualityLevel?: string;
+  };
+  ragSources?: any[];
   criticReview?: { issues: string[]; suggestions: string[] };
   // Per-slide constraint overrides
   useConstraints?: boolean; // true=use global (default), false=use overrides
@@ -132,6 +188,9 @@ export type Presentation = {
   fullScript?: string;
   researchNotebook?: ResearchNote[];
   theme?: 'brand' | 'muted' | 'dark';
+  workflowSessionId?: string;
+  workflowState?: any;
+  workflowTrace?: any[];
 };
 
 export type AppState =

@@ -1,11 +1,13 @@
-
 """Main entry point for the orchestration service."""
 
 import asyncio
 import logging
 from dotenv import load_dotenv
 
-from orchestrate_agent import orchestrator, run_workflow
+if __package__:
+    from .orchestrate_agent import orchestrator, run_workflow  # package context
+else:  # pragma: no cover - executed when run as top-level module
+    from orchestrate_agent import orchestrator, run_workflow
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)

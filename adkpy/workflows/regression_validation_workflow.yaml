@@ -1,0 +1,154 @@
+
+id: regression_validation_workflow
+version: 0.1.0
+description: Replay a presentation brief end-to-end to capture quality metrics for regression testing.
+state_model: adkpy.schemas.workflow_state.PresentationWorkflowState
+metadata:
+  owner: presentationpro
+  tags:
+    - regression
+    - monitoring
+steps:
+  - id: clarify
+    type: agent
+    name: clarifier
+    description: Clarify requirements using cached briefs.
+    input:
+      history: ${inputs.history}
+      initialInput: ${inputs.initialInput}
+      newFiles: ${inputs.newFiles}
+      presentationId: ${inputs.presentationId}
+    on_success:
+      mutate_state: store_clarify_result
+
+  - id: outline
+    type: agent
+    name: outline
+    description: Produce an outline for the provided brief.
+    input:
+      clarifiedContent: ${state.clarify.response}
+      audience: ${inputs.initialInput.audience}
+      tone: ${inputs.initialInput.tone}
+      length: ${inputs.initialInput.length}
+      template: ${inputs.initialInput.template}
+    on_success:
+      mutate_state: store_outline_result
+
+  - id: slide_generation
+    type: agent
+    name: slide_writer
+    description: Generate slides for the outline.
+    input:
+      clarifiedContent: ${state.clarify.response}
+      outline: ${state.outline.raw.outline}
+      audience: ${inputs.initialInput.audience}
+      tone: ${inputs.initialInput.tone}
+      length: ${inputs.initialInput.length}
+      assets: ${inputs.newFiles}
+      ragContext: ${state.rag}
+    on_success:
+      mutate_state: set_slides
+
+  - id: slide_design
+    type: parallel
+    name: slide_design
+    foreach: ${state.slides}
+    workflow:
+      id: regression_design_per_slide
+      type: sequential
+      steps:
+        - id: select_design_tokens
+          type: tool
+          name: workflow.map_design_tokens
+          input:
+            initialInput: ${inputs.initialInput}
+            slide: ${item}
+        - id: design_slide
+          type: agent
+          name: design
+          input:
+            slide: ${item}
+            theme: ${steps.select_design_tokens.result.background}
+            pattern: ${steps.select_design_tokens.result.pattern}
+            overlay: ${steps.select_design_tokens.result.overlay}
+            layout: ${steps.select_design_tokens.result.layout}
+        - id: store_design
+          type: tool
+          name: workflow.prepare_design_payload
+          input:
+            slideId: ${item.id}
+            designResponse: ${steps.design_slide.result}
+            tokens: ${steps.select_design_tokens.result}
+            presentationId: ${inputs.presentationId}
+          on_success:
+            mutate_state: merge_design
+
+  - id: slide_review
+    type: parallel
+    name: slide_review
+    foreach: ${state.slides}
+    workflow:
+      id: regression_review_per_slide
+      type: sequential
+      steps:
+        - id: critique_slide
+          type: agent
+          name: critic
+          input:
+            slide: ${item}
+            assets: ${inputs.newFiles}
+        - id: store_critic_feedback
+          type: tool
+          name: workflow.prepare_critic_payload
+          input:
+            slideId: ${item.id}
+            critique: ${steps.critique_slide.result}
+          on_success:
+            mutate_state: merge_critic_feedback
+
+  - id: notes_polish
+    type: parallel
+    name: notes_polish
+    foreach: ${state.slides}
+    workflow:
+      id: regression_notes_per_slide
+      type: sequential
+      steps:
+        - id: select_notes_tone
+          type: tool
+          name: workflow.select_notes_tone
+          input:
+            initialInput: ${inputs.initialInput}
+        - id: polish_notes
+          type: agent
+          name: notes_polisher
+          input:
+            speakerNotes: ${item.speakerNotes}
+            tone: ${steps.select_notes_tone.result.tone}
+        - id: store_polished_notes
+          type: tool
+          name: workflow.prepare_notes_payload
+          input:
+            slideId: ${item.id}
+            polisherResult: ${steps.polish_notes.result}
+          on_success:
+            mutate_state: merge_notes
+
+  - id: script_generation
+    type: agent
+    name: script_writer
+    description: Generate narration for regression metrics.
+    input:
+      slides: ${state.slides}
+      assets: ${inputs.newFiles}
+    on_success:
+      mutate_state: store_script
+
+  - id: regression_metrics
+    type: tool
+    name: workflow.collect_regression_metrics
+    description: Capture aggregate metrics for monitoring.
+    input:
+      state: ${state}
+    on_success:
+      mutate_state: set_final_response

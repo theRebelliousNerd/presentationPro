@@ -55,6 +55,9 @@ const getInitialState = (id: string): {
     slides: [],
     fullScript: '',
     researchNotebook: [],
+    workflowSessionId: undefined,
+    workflowState: undefined,
+    workflowTrace: [],
   },
 });
 
@@ -72,17 +75,34 @@ export function usePresentationStateArango(presentationIdOverride?: string): {
   uploadFile: (file: File, category?: 'content'|'style'|'graphics') => Promise<UploadedFileRef>;
   duplicatePresentation: () => Promise<string>;
   saveNow: () => Promise<void>;
+  qualityGateSettings?: any;
+  setQualityGateSettings?: (settings: any) => void;
 } {
   const [isLoaded, setIsLoaded] = useState(false);
   const [appState, setAppState] = useState<AppState>('initial');
   const [presentation, setPresentation] = useState<Presentation>(getInitialState('').presentation);
   const [presentationId, setPresentationId] = useState<string | null>(null);
   const cancelAutosaveRef = useRef(false);
+  const [qualityGateSettings, setQualityGateSettings] = useState<any>(null);
+
+  // Load quality gate settings
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('qualityGateSettings');
+      if (saved) {
+        setQualityGateSettings(JSON.parse(saved));
+      }
+    } catch (error) {
+      console.error('Failed to load quality gate settings:', error);
+    }
+  }, []);
 
   // Load presentation ID from localStorage or create a new one
   useEffect(() => {
     if (presentationIdOverride) {
       setPresentationId(presentationIdOverride);
+      // Also update localStorage to keep it in sync
+      localStorage.setItem('presentationId', presentationIdOverride);
       return;
     }
     let currentId = localStorage.getItem('presentationId');
@@ -271,5 +291,7 @@ export function usePresentationStateArango(presentationIdOverride?: string): {
     uploadFile,
     duplicatePresentation,
     saveNow,
+    qualityGateSettings,
+    setQualityGateSettings,
   };
 }

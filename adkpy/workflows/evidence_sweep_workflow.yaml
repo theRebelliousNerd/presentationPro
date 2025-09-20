@@ -1,0 +1,73 @@
+
+id: evidence_sweep_workflow
+version: 0.1.0
+description: Sweep an existing deck for citations and supporting evidence before export.
+state_model: adkpy.schemas.workflow_state.PresentationWorkflowState
+metadata:
+  owner: presentationpro
+  tags:
+    - evidence
+    - qa
+steps:
+  - id: load_slides
+    type: tool
+    name: workflow.load_slides
+    description: Normalize provided slides into workflow state prior to QA.
+    input:
+      slides: ${inputs.slides}
+    on_success:
+      mutate_state: set_slides
+
+  - id: per_slide_evidence
+    type: parallel
+    name: per_slide_evidence
+    description: Retrieve supporting context and critique each slide for sourcing.
+    foreach: ${state.slides}
+    workflow:
+      id: evidence_per_slide
+      type: sequential
+      steps:
+        - id: retrieve_context
+          type: tool
+          name: graph_rag.retrieve
+          input:
+            presentation_id: ${inputs.presentationId}
+            query: ${item.title}
+            limit: 6
+          on_success:
+            mutate_state: cache_section_rag
+        - id: research_slide
+          type: agent
+          name: research
+          input:
+            presentationId: ${inputs.presentationId}
+            query: ${item.title}
+            history: []
+          on_success:
+            mutate_state: append_research_findings
+        - id: critique_slide
+          type: agent
+          name: critic
+          input:
+            slide: ${item}
+            assets: ${steps.retrieve_context.result.chunks}
+            mode: evidence
+        - id: store_critic_feedback
+          type: tool
+          name: workflow.prepare_critic_payload
+          input:
+            slideId: ${item.id}
+            critique: ${steps.critique_slide.result}
+          on_success:
+            mutate_state: merge_critic_feedback
+
+  - id: finalize_payload
+    type: tool
+    name: workflow.finalize_payload
+    description: Assemble refreshed slides, findings, and citations.
+    input:
+      slides: ${state.slides}
+      script: ${state.script}
+      ragContext: ${state.rag}
+    on_success:
+      mutate_state: set_final_response

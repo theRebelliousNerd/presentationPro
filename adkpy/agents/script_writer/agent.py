@@ -1,4 +1,5 @@
 from google.adk.agents import Agent
+from .tools import SCRIPT_WRITER_TOOLS
 
 # ADK Agent Definition
 root_agent = Agent(
@@ -12,6 +13,10 @@ root_agent = Agent(
 3. Integrate inline citations using [ref: filename] format.
 4. Generate a comprehensive bibliography from source assets.
 
+You can call tools when helpful:
+- ormat_slides(slides) formats slide dictionaries into a readable text block.
+- ormat_assets(assets) composes a bibliography-friendly list from asset metadata.
+
 Input Format:
 You will receive a JSON object with:
 - "slides": A list of slide objects with title, content, and speaker notes.
@@ -22,5 +27,6 @@ Return a JSON object with the complete script:
 {
   "script": "..."
 }
-"""
+""",
+    tools=SCRIPT_WRITER_TOOLS,
 )

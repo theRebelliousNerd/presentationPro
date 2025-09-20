@@ -2,29 +2,17 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install uv for faster package installation
+RUN apt-get update && apt-get install -y gcc g++ && rm -rf /var/lib/apt/lists/*
 RUN pip install uv
 
-# Copy requirements and install Python dependencies using uv
-COPY requirements.txt .
-RUN uv pip install --system --no-cache -r requirements.txt
+COPY adkpy/agents/orchestrate/requirements.txt /tmp/requirements.txt
+RUN uv pip install --system --no-cache-dir -r /tmp/requirements.txt
 
-# Copy the orchestrate agent code
-COPY . .
+COPY adkpy /app/adkpy
 
-# Environment variables (can be overridden at runtime)
-ENV GOOGLE_GENAI_API_KEY=""
-ENV REMOTE_AGENT_ADDRESSES=""
-ENV PORT=10000
+ENV PYTHONPATH=/app
+WORKDIR /app/adkpy/agents/orchestrate
 
-# Expose the port
 EXPOSE 10000
 
-# Run the orchestrate agent
 CMD ["python", "-m", "agent"]

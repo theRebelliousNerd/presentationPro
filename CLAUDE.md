@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Next-Gen Presentation Studio - An AI-powered presentation creation tool that guides users through a multi-step process to create presentations using Google's Agent Development Kit (ADK) and Agent-to-Agent (A2A) protocol.
+Next-Gen Presentation Studio - An AI-powered presentation creation tool that guides users through a multi-step process to create presentations using Google's Agent Development Kit (ADK) and Agent-to-Agent (A2A) protocol with advanced workflow orchestration and Graph RAG integration.
 
 ## Development Commands
 
@@ -150,4 +150,60 @@ docker compose ps
 - Agent models configurable per-agent in Settings
 - File uploads processed for text extraction before AI analysis
 - Web search uses cache to reduce API calls
-- use uv for all installs and dependencies
+- Use uv for all Python installs and dependencies
+- Workflow state tracks execution progress and telemetry
+- Graph RAG provides section-specific context for each slide
+- Parallel slide generation supported via workflow configuration
+- Quality evaluation loops ensure content meets standards
+- A2A agent cards enable dynamic capability discovery
+
+## Workflow Development
+
+### Creating New Workflows
+
+```yaml
+# adkpy/workflows/custom_workflow.yaml
+id: custom_workflow
+version: 1.0.0
+steps:
+  - id: step1
+    type: agent|tool|parallel|loop
+    name: agent_or_tool_name
+    input:
+      key: ${inputs.value}  # Reference inputs
+      state: ${state.field}  # Reference state
+    on_success:
+      mutate_state: handler_name  # State mutation
+```
+
+### Workflow Patterns
+
+1. **Sequential**: Steps execute in order
+2. **Parallel**: Fan-out to multiple agents/tools
+3. **Loop**: Iterate until condition met
+4. **Conditional**: Branch based on state
+
+### State Management
+
+- Workflow state defined in `schemas/workflow_state.py`
+- Mutations handled in `workflows/mutations.py`
+- State persists across workflow steps
+- Access via `${state.field}` in YAML
+
+## Recent Architectural Improvements
+
+Based on Google ADK Multi-Agent Patterns:
+
+1. **Dynamic Agent Discovery**: A2A cards for runtime capability resolution
+2. **Workflow Orchestration**: YAML-driven sequential/parallel/loop patterns
+3. **Graph RAG Integration**: ArangoDB as knowledge fabric for presentations
+4. **MCP Tool Server**: Centralized tool access via Model Context Protocol
+5. **Telemetry-First**: Comprehensive tracking at every orchestration step
+6. **Policy Enforcement**: A2A policies for guardrails and token budgets
+7. **Graceful Degradation**: Fallback mechanisms for unhealthy agents
+
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.

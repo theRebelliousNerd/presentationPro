@@ -8,6 +8,7 @@ and provide a simple interface for the orchestrator to use.
 
 from typing import Dict, Any, Optional, List
 import json
+import textwrap
 from pydantic import BaseModel, Field
 import json
 import logging
@@ -274,6 +275,7 @@ class SlideWriterInput(BaseModel):
     tone: Optional[str] = None
     length: Optional[str] = None
     assets: Optional[List[Dict[str, Any]]] = None
+    ragContext: Optional[Dict[str, Any]] = None
     constraints: Optional[Any] = None
     existing: Optional[List[Dict[str, Any]]] = None
     writerModel: Optional[str] = Field(None, description="Model for writer agent")
@@ -291,11 +293,71 @@ class SlideWriterAgent(BaseAgentWrapper):
         if model:
             self.set_model(model)
 
-        # Generate slides for all titles in the outline
         slides: List[Dict[str, Any]] = []
         total_prompt_tokens = 0
         total_completion_tokens = 0
         total_duration_ms = 0
+
+        rag_context_raw = data.ragContext or {}
+        if isinstance(rag_context_raw, dict):
+            section_payload = rag_context_raw.get("sections") or {}
+            presentation_payload = rag_context_raw.get("presentation") or []
+        else:
+            section_payload = getattr(rag_context_raw, "sections", {}) or {}
+            presentation_payload = getattr(rag_context_raw, "presentation", []) or []
+
+        def _obj_get(obj: Any, key: str, default: Any = None) -> Any:
+            if isinstance(obj, dict):
+                return obj.get(key, default)
+            return getattr(obj, key, default)
+
+        def _normalize_chunks(container: Any) -> List[Dict[str, Any]]:
+            if not container:
+                return []
+            chunks = container
+            if isinstance(container, dict):
+                chunks = container.get("chunks")
+                if chunks is None and ("text" in container or hasattr(container, "text")):
+                    chunks = [container]
+            normalized: List[Dict[str, Any]] = []
+            for chunk in chunks or []:
+                normalized.append({
+                    "chunkKey": _obj_get(chunk, "chunkKey") or _obj_get(chunk, "chunk_key"),
+                    "name": _obj_get(chunk, "name"),
+                    "text": _obj_get(chunk, "text", ""),
+                    "url": _obj_get(chunk, "url"),
+                    "score": _obj_get(chunk, "score"),
+                })
+            return normalized
+
+        section_lookup: Dict[str, List[Dict[str, Any]]] = {}
+        items: List[Any]
+        if isinstance(section_payload, dict):
+            items = list(section_payload.items())
+        else:
+            try:
+                items = list(section_payload.items())
+            except Exception:
+                try:
+                    items = list(enumerate(section_payload))
+                except Exception:
+                    items = []
+        for key, value in items:
+            chunks = _normalize_chunks(value)
+            if not chunks:
+                continue
+            if isinstance(key, str):
+                section_lookup.setdefault(key.lower(), chunks)
+            title_value = _obj_get(value, "title")
+            if isinstance(title_value, str):
+                section_lookup.setdefault(title_value.lower(), chunks)
+
+        global_chunks = _normalize_chunks(presentation_payload)
+
+        def _section_chunks_for(title: str) -> List[Dict[str, Any]]:
+            if not title:
+                return []
+            return section_lookup.get(title.lower(), [])
 
         for slide_title in data.outline:
             system_prompt = (
@@ -305,7 +367,8 @@ class SlideWriterAgent(BaseAgentWrapper):
                 "- Create 3-5 bullet points for the slide content\n"
                 "- Write detailed speaker notes (2-3 paragraphs)\n"
                 "- Suggest an image prompt for visual enhancement\n"
-                "- Match the specified tone and audience level\n\n"
+                "- Match the specified tone and audience level\n"
+                "- Incorporate the provided research context when available and cite sources in the speaker notes using [Source] markers\n\n"
                 "Output Format:\n"
                 "Return a JSON object with this structure:\n"
                 "{\n"
@@ -326,12 +389,53 @@ class SlideWriterAgent(BaseAgentWrapper):
             if data.length:
                 context_parts.append(f"Length preference: {data.length}")
 
+            section_chunks = _section_chunks_for(slide_title)[:3]
+            general_chunks_subset = [chunk for chunk in global_chunks if chunk not in section_chunks][:2]
+
+            section_lines: List[str] = []
+            general_lines: List[str] = []
+            references: List[Dict[str, Any]] = []
+            seen_refs: set[str] = set()
+
+            def _register_reference(chunk_dict: Dict[str, Any]) -> None:
+                label = (chunk_dict.get("name") or "").strip()
+                key = f"{label}|{chunk_dict.get('url')}"
+                if key in seen_refs:
+                    return
+                seen_refs.add(key)
+                references.append({
+                    "name": label or None,
+                    "url": chunk_dict.get("url"),
+                    "score": chunk_dict.get("score"),
+                })
+
+            def _format_chunk_line(chunk_dict: Dict[str, Any]) -> str:
+                raw_text = chunk_dict.get("text") or ""
+                condensed = " ".join(raw_text.split())
+                snippet = textwrap.shorten(condensed, width=220, placeholder="...")
+                source_label = chunk_dict.get("name") or chunk_dict.get("url") or "context"
+                _register_reference(chunk_dict)
+                return f"- {snippet} (source: {source_label})"
+
+            for chunk in section_chunks:
+                section_lines.append(_format_chunk_line(chunk))
+            for chunk in general_chunks_subset:
+                general_lines.append(_format_chunk_line(chunk))
+
             prompt_parts = [
                 system_prompt,
                 f"\nSlide title: {slide_title}",
-                "\n" + "\n".join(context_parts) if context_parts else "",
-                "\nGenerate appropriate content for this slide."
             ]
+            if context_parts:
+                prompt_parts.append("\n" + "\n".join(context_parts))
+            evidence_blocks: List[str] = []
+            if section_lines:
+                evidence_blocks.append("Section-specific evidence:\n" + "\n".join(section_lines))
+            if general_lines:
+                evidence_blocks.append("Cross-presentation context:\n" + "\n".join(general_lines))
+            if evidence_blocks:
+                prompt_parts.append("\n".join(evidence_blocks))
+            prompt_parts.append("\nGenerate appropriate content for this slide.")
 
             text, usage = self.llm(prompt_parts)
 
@@ -351,6 +455,18 @@ class SlideWriterAgent(BaseAgentWrapper):
                     "speakerNotes": "Speaker notes for this slide.",
                     "imagePrompt": "Professional presentation slide background"
                 }
+
+            if references:
+                citations = slide_data.get("citations") or []
+                for ref in references:
+                    label = ref.get("name") or ref.get("url")
+                    if label and label not in citations:
+                        citations.append(label)
+                slide_data["citations"] = citations
+                metadata = slide_data.get("metadata") or {}
+                metadata["ragSources"] = references
+                slide_data["metadata"] = metadata
+                logger.info("slide_writer grounded '%s' with %d references", slide_title, len(references))
 
             slides.append(slide_data)
             try:
@@ -377,6 +493,7 @@ class CriticInput(BaseModel):
     slide: Dict[str, Any]
     audience: Optional[str] = None
     tone: Optional[str] = None
+    mode: Optional[str] = Field(None, description="Critique mode: content, design, or evidence")
     textModel: Optional[str] = Field(None, description="Model to use for this request")
     presentationId: Optional[str] = Field(None, description="Presentation ID (for persistence)")
     slideIndex: Optional[int] = Field(None, description="Slide index (for persistence)")
@@ -395,12 +512,35 @@ class CriticAgent(BaseAgentWrapper):
         content = slide.get("content", [])
         notes = slide.get("speakerNotes", "")
 
-        system = (
-            "You are a Critic agent for slide quality. Improve content while preserving intent.\n"
-            "- 3–5 concise bullets\n- Avoid redundancy\n- Strong verbs\n- Consistent parallelism\n"
-            "- Ensure notes are clear and actionable\n- Improve title clarity if needed\n\n"
-            "Output JSON: {\n  \"slide\": {\"title\":..., \"content\": [...], \"speakerNotes\": ...},\n  \"review\": {\"issues\": [...], \"suggestions\": [...]}\n}"
-        )
+        mode = (data.mode or 'content').lower()
+        design = slide.get('design') or slide.get('designSpec') or {}
+        quality_snapshot = slide.get('qualityAssessment') or slide.get('quality_metrics')
+
+        if mode == 'design':
+            system = (
+                "You are a visual QA critic focused on layered design tokens and accessibility guardrails.\n"
+                "- Evaluate the provided background, pattern, overlay, and layout tokens for contrast and readability.\n"
+                "- Flag contrast failures and suggest alternative token IDs when needed.\n"
+                "- Ensure the layout supports the bullet structure and speaker notes.\n"
+                "- Maintain content meaning while improving visual guardrails.\n"
+                "Output JSON: {\n  \"slide\": {...},\n  \"review\": {...},\n  \"qualityAssessment\": {...optional...},\n  \"improvementSummary\": \"...\"\n}\n"
+            )
+        elif mode == 'evidence':
+            system = (
+                "You are an evidence QA critic ensuring slides cite supporting assets.\n"
+                "- Use the supplied assets to validate claims and flag missing references.\n"
+                "- Recommend where citations ([ref: filename]) are needed.\n"
+                "- Keep wording improvements minimal and accurate.\n"
+                "Output JSON mirroring {slide, review, qualityAssessment?, improvementSummary?}.\n"
+            )
+        else:
+            system = (
+                "You are a Critic agent for slide quality. Improve content while preserving intent.\n"
+                "- 3-5 concise bullets\n- Avoid redundancy\n- Strong verbs\n- Consistent parallelism\n"
+                "- Ensure notes are clear and actionable\n- Improve title clarity if needed\n"
+                "Include a review object summarizing issues/suggestions and optionally a qualityAssessment summary.\n"
+                "Output JSON: {slide: {...}, review: {...}, qualityAssessment?: {...}}\n"
+            )
 
         prompt_parts = [
             system,
@@ -408,22 +548,40 @@ class CriticAgent(BaseAgentWrapper):
             f"Title: {title}",
             f"Bullets: {json.dumps(content)}",
             f"Notes: {notes}",
-            "Return JSON only."
         ]
+
+        if design:
+            tokens = design.get('tokens')
+            if tokens:
+                prompt_parts.append(f"Design tokens: {json.dumps(tokens)}")
+            layers = design.get('layers')
+            if layers:
+                prompt_parts.append(f"Design layers: {json.dumps(layers)}")
+        if quality_snapshot:
+            prompt_parts.append(f"Existing quality metrics: {json.dumps(quality_snapshot)}")
+        prompt_parts.append('Return JSON only.')
 
         text, usage = self.llm(prompt_parts)
         try:
             cleaned = text.strip().removeprefix("```json").removesuffix("```")
             obj = json.loads(cleaned)
-            out_slide = obj.get("slide") or {
-                "title": title,
-                "content": content,
-                "speakerNotes": notes,
+            out_slide = obj.get('slide') or {
+                'title': title,
+                'content': content,
+                'speakerNotes': notes,
             }
-            review = obj.get("review") or {"issues": [], "suggestions": []}
-            return AgentResult(data={"slide": out_slide, "review": review}, usage=usage)
+            review = obj.get('review') or {'issues': [], 'suggestions': []}
+            quality_assessment = obj.get('qualityAssessment') or obj.get('quality_assessment')
+            improvement_summary = obj.get('improvementSummary')
+
+            payload = {'slide': out_slide, 'review': review}
+            if quality_assessment:
+                payload['qualityAssessment'] = quality_assessment
+            if improvement_summary:
+                payload['improvementSummary'] = improvement_summary
+            return AgentResult(data=payload, usage=usage)
         except Exception:
-            return AgentResult(data={"slide": slide, "review": {"issues": [], "suggestions": []}}, usage=usage)
+            return AgentResult(data={'slide': slide, 'review': {'issues': [], 'suggestions': []}}, usage=usage)
 
 
 # ============= NotesPolisher Agent Wrapper =============
@@ -673,7 +831,7 @@ class DesignAgent(BaseAgentWrapper):
             try:
                 import os, httpx
                 if os.environ.get('DESIGN_USE_VISIONCV', 'false').lower() == 'true' and (data.screenshotDataUrl or data.slide.get('screenshotDataUrl')):
-                    base = os.environ.get('ADK_BASE_URL', 'http://localhost:8088')
+                    base = os.environ.get('ADK_BASE_URL', 'http://api-gateway:8088')
                     url = (base or '').rstrip('/') + '/v1/visioncv/placement'
                     body = { 'screenshotDataUrl': data.screenshotDataUrl or data.slide.get('screenshotDataUrl') }
                     with httpx.Client(timeout=8.0) as client:
@@ -753,8 +911,7 @@ class ScriptWriterAgent(BaseAgentWrapper):
             if isinstance(notes, str) and notes.strip():
                 section_lines.append('Existing speaker notes:')
                 section_lines.append(notes.strip())
-            slide_blocks.append("
-".join(section_lines))
+            slide_blocks.append("\n".join(section_lines))
 
         asset_lines = []
         for asset in data.assets or []:
@@ -772,18 +929,18 @@ class ScriptWriterAgent(BaseAgentWrapper):
 
         prompt_parts = [system_prompt]
         if slide_blocks:
-            prompt_parts.append("
-Presentation slides with details:
-" + "
-
-".join(slide_blocks))
+            prompt_parts.append(
+                "\nPresentation slides with details:\n\n" + "\n\n".join(slide_blocks)
+            )
         if asset_lines:
-            prompt_parts.append("
-Reference assets available for the script:
-" + "
-".join(asset_lines))
-        prompt_parts.append("
-Generate a complete presentation script that references slides in order, transitions smoothly, and mentions assets when relevant.")
+            prompt_parts.append(
+                "\nReference assets available for the script:\n" + "\n".join(asset_lines)
+            )
+        prompt_parts.append(
+            "\nGenerate a complete presentation script that references slides in order, "
+            "transitions smoothly, and mentions assets when relevant."
+        )
+
 
         text, usage = self.llm(prompt_parts)
 
@@ -864,7 +1021,7 @@ class ResearchAgent(BaseAgentWrapper):
         extras: dict = {}
         try:
             import os, httpx
-            base = os.environ.get('ADK_BASE_URL', 'http://localhost:8088')
+            base = os.environ.get('ADK_BASE_URL', 'http://api-gateway:8088')
             if os.environ.get('RESEARCH_USE_VISIONCV', 'false').lower() == 'true':
                 with httpx.Client(timeout=8.0) as client:
                     if data.imageDataUrl:
@@ -914,3 +1071,7 @@ class ResearchAgent(BaseAgentWrapper):
             data={ 'rules': rules, 'source': used, **({ 'extractions': extras } if extras else {}) },
             usage=usage
         )
+
+
+
+

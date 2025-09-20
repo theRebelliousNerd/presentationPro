@@ -1,0 +1,178 @@
+{
+  "sessionId": "f6b06d6a575c4f90a88947f93970cc5c",
+  "state": {
+    "presentationId": "demo-graph",
+    "audience": "engineering leadership",
+    "tone": "balanced",
+    "length": "medium",
+    "history": [
+      {
+        "content": "Need a 30-minute automation strategy briefing for engineering leads. Developers have intermediate AI experience and must leave ready to identify top automation opportunities, measure impact, and launch a 90-day pilot.",
+        "role": "user"
+      }
+    ],
+    "rag": {
+      "presentation": [],
+      "sections": {}
+    },
+    "clarify": {
+      "response": "What is the planned presentation mode (e.g., in-person, virtual, hybrid)?",
+      "finished": false,
+      "telemetry": {}
+    },
+    "outline": {
+      "sections": [],
+      "raw": {}
+    },
+    "slides": [],
+    "script": null,
+    "research": {
+      "prompt": null,
+      "query": null,
+      "findings": []
+    },
+    "ingest_summary": {
+      "ok": true,
+      "docs": 0,
+      "chunks": 0
+    },
+    "final_response": {
+      "status": "needs_clarification",
+      "clarify": {
+        "refinedGoals": "What is the planned presentation mode (e.g., in-person, virtual, hybrid)?",
+        "finished": false,
+        "initialInputPatch": {
+          "text": "This presentation outlines an AI automation strategy for engineering leads. It aims to equip them with the knowledge to identify key automation opportunities within their teams, establish methods for measuring the impact of these initiatives, and prepare them to launch a 90-day pilot program for AI-driven automation.",
+          "length": "medium",
+          "audience": "Engineering leads",
+          "industry": "Software Development",
+          "subIndustry": "AI/ML Automation",
+          "objective": "To brief engineering leads on AI automation strategy, enabling them to identify top opportunities, measure impact, and initiate a 90-day pilot program.",
+          "keyMessages": [
+            "Identify top AI automation opportunities within your teams.",
+            "Understand how to measure the impact of AI automation initiatives.",
+            "Prepare to launch a 90-day pilot program for AI-driven automation."
+          ],
+          "callToAction": "Launch a 90-day AI automation pilot.",
+          "audienceExpertise": "intermediate",
+          "timeConstraintMin": 30,
+          "successCriteria": [
+            "Audience members can identify top automation opportunities.",
+            "Audience members understand how to measure the impact of automation.",
+            "Audience members are prepared to launch a 90-day pilot program."
+          ],
+          "language": "en",
+          "locale": "en-US",
+          "readingLevel": "intermediate"
+        },
+        "usage": {
+          "model": "gemini-2.5-flash",
+          "promptTokens": 848,
+          "completionTokens": 370,
+          "durationMs": 9005
+        }
+      }
+    },
+    "metadata": {
+      "sessionId": "f6b06d6a575c4f90a88947f93970cc5c"
+    },
+    "quality_state": {
+      "overall_presentation_score": 100,
+      "total_slides_assessed": 0,
+      "slides_requiring_fixes": 0,
+      "auto_fixes_applied": 0,
+      "manual_review_required": false,
+      "quality_gate_failures": [],
+      "quality_improvements": [],
+      "brand_compliance_level": "excellent",
+      "accessibility_compliance_level": "excellent",
+      "visual_clarity_level": "excellent"
+    }
+  },
+  "final": {
+    "status": "needs_clarification",
+    "clarify": {
+      "refinedGoals": "What is the planned presentation mode (e.g., in-person, virtual, hybrid)?",
+      "finished": false,
+      "initialInputPatch": {
+        "text": "This presentation outlines an AI automation strategy for engineering leads. It aims to equip them with the knowledge to identify key automation opportunities within their teams, establish methods for measuring the impact of these initiatives, and prepare them to launch a 90-day pilot program for AI-driven automation.",
+        "length": "medium",
+        "audience": "Engineering leads",
+        "industry": "Software Development",
+        "subIndustry": "AI/ML Automation",
+        "objective": "To brief engineering leads on AI automation strategy, enabling them to identify top opportunities, measure impact, and initiate a 90-day pilot program.",
+        "keyMessages": [
+          "Identify top AI automation opportunities within your teams.",
+          "Understand how to measure the impact of AI automation initiatives.",
+          "Prepare to launch a 90-day pilot program for AI-driven automation."
+        ],
+        "callToAction": "Launch a 90-day AI automation pilot.",
+        "audienceExpertise": "intermediate",
+        "timeConstraintMin": 30,
+        "successCriteria": [
+          "Audience members can identify top automation opportunities.",
+          "Audience members understand how to measure the impact of automation.",
+          "Audience members are prepared to launch a 90-day pilot program."
+        ],
+        "language": "en",
+        "locale": "en-US",
+        "readingLevel": "intermediate"
+      },
+      "usage": {
+        "model": "gemini-2.5-flash",
+        "promptTokens": 848,
+        "completionTokens": 370,
+        "durationMs": 9005
+      }
+    }
+  },
+  "trace": [
+    {
+      "id": "ingest_assets",
+      "type": "tool",
+      "result": {
+        "ok": true,
+        "docs": 0,
+        "chunks": 0
+      }
+    },
+    {
+      "id": "clarify",
+      "type": "agent",
+      "result": {
+        "refinedGoals": "What is the planned presentation mode (e.g., in-person, virtual, hybrid)?",
+        "finished": false,
+        "initialInputPatch": {
+          "text": "This presentation outlines an AI automation strategy for engineering leads. It aims to equip them with the knowledge to identify key automation opportunities within their teams, establish methods for measuring the impact of these initiatives, and prepare them to launch a 90-day pilot program for AI-driven automation.",
+          "length": "medium",
+          "audience": "Engineering leads",
+          "industry": "Software Development",
+          "subIndustry": "AI/ML Automation",
+          "objective": "To brief engineering leads on AI automation strategy, enabling them to identify top opportunities, measure impact, and initiate a 90-day pilot program.",
+          "keyMessages": [
+            "Identify top AI automation opportunities within your teams.",
+            "Understand how to measure the impact of AI automation initiatives.",
+            "Prepare to launch a 90-day pilot program for AI-driven automation."
+          ],
+          "callToAction": "Launch a 90-day AI automation pilot.",
+          "audienceExpertise": "intermediate",
+          "timeConstraintMin": 30,
+          "successCriteria": [
+            "Audience members can identify top automation opportunities.",
+            "Audience members understand how to measure the impact of automation.",
+            "Audience members are prepared to launch a 90-day pilot program."
+          ],
+          "language": "en",
+          "locale": "en-US",
+          "readingLevel": "intermediate"
+        },
+        "usage": {
+          "model": "gemini-2.5-flash",
+          "promptTokens": 848,
+          "completionTokens": 370,
+          "durationMs": 9005
+        }
+      }
+    }
+  ]
+}

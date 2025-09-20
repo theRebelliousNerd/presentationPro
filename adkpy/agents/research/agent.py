@@ -1,6 +1,5 @@
 from google.adk.agents import Agent
-from google.adk.tools import google_search
-
+from .tools import RESEARCH_TOOLS
 
 # ADK Agent Definition
 root_agent = Agent(
@@ -14,6 +13,9 @@ root_agent = Agent(
 3. Gather case studies and examples.
 4. Locate authoritative sources and citations.
 5. Provide context and background information.
+
+You can call tools when helpful:
+- get_web_evidence(query, top_k=5, allow_domains=None) performs a web search and returns formatted snippets.
 
 Input Format:
 You will receive a JSON object with:
@@ -38,6 +40,5 @@ Return a JSON object with comprehensive research findings:
 
 When tool_results are provided, incorporate them into your findings and properly cite the sources.
 """,
-    tools=[google_search]
-
+    tools=RESEARCH_TOOLS,
 )

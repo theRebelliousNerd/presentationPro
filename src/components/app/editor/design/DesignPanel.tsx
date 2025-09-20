@@ -3,6 +3,7 @@ import type { Slide } from '@/lib/types'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import VariantPicker from './VariantPicker'
 import TokenEditor from './TokenEditor'
+import DesignLayers from './DesignLayers'
 import CodeEditor from './CodeEditor'
 import { Button } from '@/components/ui/button'
 
@@ -25,6 +26,7 @@ export default function DesignPanel({ slide, updateSlide, applyTokensToAll }: De
         <TabsList>
           <TabsTrigger value="variants">Variants</TabsTrigger>
           <TabsTrigger value="tokens">Tokens</TabsTrigger>
+          <TabsTrigger value="layers">Layers</TabsTrigger>
           <TabsTrigger value="code">Code</TabsTrigger>
         </TabsList>
         <TabsContent value="variants">
@@ -32,6 +34,9 @@ export default function DesignPanel({ slide, updateSlide, applyTokensToAll }: De
         </TabsContent>
         <TabsContent value="tokens">
           <TokenEditor slide={slide} updateSlide={updateSlide} onApplyToAll={applyTokensToAll} />
+        </TabsContent>
+        <TabsContent value="layers">
+          <DesignLayers slide={slide} />
         </TabsContent>
         <TabsContent value="code">
           <CodeEditor slide={slide} updateSlide={updateSlide} />

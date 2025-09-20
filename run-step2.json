@@ -1,0 +1,223 @@
+{
+  "sessionId": "f6b06d6a575c4f90a88947f93970cc5c",
+  "state": {
+    "presentationId": "demo-graph",
+    "audience": "engineering leadership",
+    "tone": "balanced",
+    "length": "medium",
+    "history": [
+      {
+        "content": "The presentation will be delivered virtually over video conference.",
+        "role": "user"
+      }
+    ],
+    "rag": {
+      "presentation": [],
+      "sections": {}
+    },
+    "clarify": {
+      "response": "What is the primary goal of this presentation for developers, and what key actions or takeaways should they have regarding AI automation strategy?",
+      "finished": false,
+      "telemetry": {}
+    },
+    "outline": {
+      "sections": [],
+      "raw": {}
+    },
+    "slides": [],
+    "script": null,
+    "research": {
+      "prompt": null,
+      "query": null,
+      "findings": []
+    },
+    "ingest_summary": {
+      "ok": true,
+      "docs": 0,
+      "chunks": 0
+    },
+    "final_response": {
+      "status": "needs_clarification",
+      "clarify": {
+        "refinedGoals": "What is the primary goal of this presentation for developers, and what key actions or takeaways should they have regarding AI automation strategy?",
+        "finished": false,
+        "initialInputPatch": {
+          "text": "This presentation will cover an AI automation strategy designed for developers. It will explore how AI can help automate workflows, personalize experiences, and analyze data at scale within software teams. The strategy should also address key concerns such as safety, explainability, and integration with existing tools.",
+          "length": null,
+          "audience": "Developers",
+          "industry": "Software Development",
+          "subIndustry": "Artificial Intelligence, Automation",
+          "tone": {
+            "formality": 3,
+            "energy": 2
+          },
+          "graphicStyle": null,
+          "template": "enterprise",
+          "objective": null,
+          "keyMessages": [],
+          "mustInclude": [
+            "safety",
+            "explainability",
+            "integration with existing tools"
+          ],
+          "mustAvoid": [],
+          "callToAction": null,
+          "audienceExpertise": null,
+          "timeConstraintMin": null,
+          "successCriteria": [],
+          "citationsRequired": false,
+          "slideDensity": "normal",
+          "language": "en",
+          "locale": "en-US",
+          "readingLevel": "intermediate",
+          "brandColors": [],
+          "brandFonts": [],
+          "logoUrl": null,
+          "presentationMode": "virtual",
+          "screenRatio": "16:9",
+          "referenceStyle": "none",
+          "allowedSources": [],
+          "bannedSources": [],
+          "animationLevel": "minimal"
+        },
+        "usage": {
+          "model": "gemini-2.5-flash",
+          "promptTokens": 816,
+          "completionTokens": 384,
+          "durationMs": 6302
+        }
+      }
+    },
+    "metadata": {
+      "sessionId": "f6b06d6a575c4f90a88947f93970cc5c"
+    },
+    "quality_state": {
+      "overall_presentation_score": 100,
+      "total_slides_assessed": 0,
+      "slides_requiring_fixes": 0,
+      "auto_fixes_applied": 0,
+      "manual_review_required": false,
+      "quality_gate_failures": [],
+      "quality_improvements": [],
+      "brand_compliance_level": "excellent",
+      "accessibility_compliance_level": "excellent",
+      "visual_clarity_level": "excellent"
+    }
+  },
+  "final": {
+    "status": "needs_clarification",
+    "clarify": {
+      "refinedGoals": "What is the primary goal of this presentation for developers, and what key actions or takeaways should they have regarding AI automation strategy?",
+      "finished": false,
+      "initialInputPatch": {
+        "text": "This presentation will cover an AI automation strategy designed for developers. It will explore how AI can help automate workflows, personalize experiences, and analyze data at scale within software teams. The strategy should also address key concerns such as safety, explainability, and integration with existing tools.",
+        "length": null,
+        "audience": "Developers",
+        "industry": "Software Development",
+        "subIndustry": "Artificial Intelligence, Automation",
+        "tone": {
+          "formality": 3,
+          "energy": 2
+        },
+        "graphicStyle": null,
+        "template": "enterprise",
+        "objective": null,
+        "keyMessages": [],
+        "mustInclude": [
+          "safety",
+          "explainability",
+          "integration with existing tools"
+        ],
+        "mustAvoid": [],
+        "callToAction": null,
+        "audienceExpertise": null,
+        "timeConstraintMin": null,
+        "successCriteria": [],
+        "citationsRequired": false,
+        "slideDensity": "normal",
+        "language": "en",
+        "locale": "en-US",
+        "readingLevel": "intermediate",
+        "brandColors": [],
+        "brandFonts": [],
+        "logoUrl": null,
+        "presentationMode": "virtual",
+        "screenRatio": "16:9",
+        "referenceStyle": "none",
+        "allowedSources": [],
+        "bannedSources": [],
+        "animationLevel": "minimal"
+      },
+      "usage": {
+        "model": "gemini-2.5-flash",
+        "promptTokens": 816,
+        "completionTokens": 384,
+        "durationMs": 6302
+      }
+    }
+  },
+  "trace": [
+    {
+      "id": "ingest_assets",
+      "type": "tool",
+      "result": {
+        "ok": true,
+        "docs": 0,
+        "chunks": 0
+      }
+    },
+    {
+      "id": "clarify",
+      "type": "agent",
+      "result": {
+        "refinedGoals": "What is the primary goal of this presentation for developers, and what key actions or takeaways should they have regarding AI automation strategy?",
+        "finished": false,
+        "initialInputPatch": {
+          "text": "This presentation will cover an AI automation strategy designed for developers. It will explore how AI can help automate workflows, personalize experiences, and analyze data at scale within software teams. The strategy should also address key concerns such as safety, explainability, and integration with existing tools.",
+          "length": null,
+          "audience": "Developers",
+          "industry": "Software Development",
+          "subIndustry": "Artificial Intelligence, Automation",
+          "tone": {
+            "formality": 3,
+            "energy": 2
+          },
+          "graphicStyle": null,
+          "template": "enterprise",
+          "objective": null,
+          "keyMessages": [],
+          "mustInclude": [
+            "safety",
+            "explainability",
+            "integration with existing tools"
+          ],
+          "mustAvoid": [],
+          "callToAction": null,
+          "audienceExpertise": null,
+          "timeConstraintMin": null,
+          "successCriteria": [],
+          "citationsRequired": false,
+          "slideDensity": "normal",
+          "language": "en",
+          "locale": "en-US",
+          "readingLevel": "intermediate",
+          "brandColors": [],
+          "brandFonts": [],
+          "logoUrl": null,
+          "presentationMode": "virtual",
+          "screenRatio": "16:9",
+          "referenceStyle": "none",
+          "allowedSources": [],
+          "bannedSources": [],
+          "animationLevel": "minimal"
+        },
+        "usage": {
+          "model": "gemini-2.5-flash",
+          "promptTokens": 816,
+          "completionTokens": 384,
+          "durationMs": 6302
+        }
+      }
+    }
+  ]
+}

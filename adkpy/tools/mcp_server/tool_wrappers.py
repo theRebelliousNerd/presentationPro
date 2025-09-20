@@ -15,16 +15,12 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
 
 # Import the actual tool implementations
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from arango_graph_rag_tool import ArangoGraphRAGTool, Asset, IngestResponse, RetrieveResponse
-from web_search_tool import WebSearchTool, WebResult
-from vision_contrast_tool import VisionContrastTool, VisionAnalyzeInput, VisionAnalyzeOutput
-from telemetry_tool import TelemetryTool, TelemetryEvent
-from assets_ingest_tool import AssetsIngestTool, IngestAssetInput, IngestSummary
-from app.design_sanitize import (
+from ..arango_graph_rag_tool import ArangoGraphRAGTool, Asset, IngestResponse, RetrieveResponse
+from ..web_search_tool import WebSearchTool, WebResult
+from ..vision_contrast_tool import VisionContrastTool, VisionAnalyzeInput, VisionAnalyzeOutput
+from ..telemetry_tool import TelemetryTool, TelemetryEvent
+from ..assets_ingest_tool import AssetsIngestTool, IngestAssetInput, IngestSummary
+from adkpy.app.design_sanitize import (
     validate_html, validate_css, validate_svg,
     sanitize_html, sanitize_css, sanitize_svg,
 )

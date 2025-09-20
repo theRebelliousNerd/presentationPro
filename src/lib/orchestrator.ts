@@ -40,6 +40,7 @@ export async function orchDesignGenerate(input: any): Promise<{ designSpec?: any
 export async function orchScript(input: any): Promise<{ script: string }> { return postJSON('/v1/script/generate', input); }
 export async function orchIngest(input: any): Promise<{ ok: boolean }> { return postJSON('/v1/ingest', input); }
 export async function orchRetrieve(input: any): Promise<{ chunks: { name: string; text: string; url?: string }[] }> { return postJSON('/v1/retrieve', input); }
+export async function orchWorkflowPresentation(input: any): Promise<any> { return postJSON('/v1/workflow/presentation', input); }
 export async function orchVisionAnalyze(input: { screenshotDataUrl: string }): Promise<{ mean: number; variance: number; recommendDarken: boolean; overlay: number }> { return postJSON('/v1/vision/analyze', input); }
 export async function orchResearchBackgrounds(input: { textModel?: string; query?: string; topK?: number; allowDomains?: string[]; presentationId?: string }): Promise<{ rules: string[]; usage?: any; extractions?: any }> { return postJSON('/v1/research/backgrounds', input); }
 

@@ -1,14 +1,22 @@
+"""Workflow-oriented orchestrator agent for PresentationPro."""
 
-# Orchestrator service that coordinates presentation agents through the API gateway.
+from __future__ import annotations
 
 import asyncio
 import json
 import logging
 import os
 from typing import Any, Dict, List
+from uuid import uuid4
 
 import httpx
 from dotenv import load_dotenv
+
+try:
+    from config.runtime import get_agent_endpoints
+except ImportError:  # pragma: no cover - when running agent standalone
+    def get_agent_endpoints() -> Dict[str, str]:
+        return {}
 
 load_dotenv()
 
@@ -17,15 +25,18 @@ log = logging.getLogger(__name__)
 
 
 class PresentationOrchestrator:
-    """Coordinate the presentation workflow by calling the FastAPI gateway."""
+    """Coordinate the presentation workflow via API gateway while tracking workflow metadata."""
 
     def __init__(self) -> None:
+        agent_endpoints = get_agent_endpoints()
         api_base = (
             os.environ.get("API_GATEWAY_URL")
             or os.environ.get("ADK_BASE_URL")
+            or agent_endpoints.get("api-gateway")
             or "http://api-gateway:8088"
         )
-        self.api_base = api_base.rstrip('/')
+        self.api_base = api_base.rstrip("/")
+        self.agent_endpoints = agent_endpoints
 
     async def _post_json(self, client: httpx.AsyncClient, path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         url = f"{self.api_base}{path}"
@@ -37,99 +48,53 @@ class PresentationOrchestrator:
             return {"raw": resp.text}
 
     async def process_presentation_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        results: Dict[str, Any] = {"status": "processing", "stages": {}}
+        results: Dict[str, Any] = {
+            "status": "processing",
+            "stages": {},
+        }
         presentation_id = request.get("presentationId")
+        if not presentation_id:
+            presentation_id = str(uuid4())
+            request["presentationId"] = presentation_id
+
         initial_input: Dict[str, Any] = request.get("initialInput") or {}
         history: List[Dict[str, Any]] = request.get("history") or []
         new_files: List[Dict[str, Any]] = request.get("newFiles") or []
         raw_assets: List[Dict[str, Any]] = request.get("assets") or []
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        # Graph RAG ingestion and seeding
+        if new_files:
+            ingest_summary = rag_ingest_workflow_tool(presentation_id, new_files)
+            results["stages"]["ingest"] = ingest_summary
+
+        seed_query = initial_input.get("text") or initial_input.get("topic") or ""
+        rag_seed = None
+        if seed_query:
+            rag_seed = rag_retrieve_workflow_tool(presentation_id, seed_query, limit=6)
+            results["stages"]["ragSeed"] = rag_seed
+
+        workflow_payload = {
+            "presentationId": presentation_id,
+            "history": history,
+            "initialInput": initial_input,
+            "newFiles": new_files,
+            "assets": raw_assets,
+        }
+
+        async with httpx.AsyncClient(timeout=120.0) as client:
             try:
-                clarify_payload = {
-                    "history": history,
-                    "initialInput": initial_input,
-                    "newFiles": new_files,
-                    "presentationId": presentation_id,
-                }
-                clarify_data = await self._post_json(client, "/v1/clarify", clarify_payload)
-                results["stages"]["clarification"] = clarify_data
+                workflow_result = await self._post_json(client, "/v1/workflow/presentation", workflow_payload)
+                results["stages"]["workflow"] = workflow_result.get("trace", [])
 
-                if not clarify_data.get("finished", True):
-                    results["status"] = "needs_clarification"
-                    return results
-
-                clarified_content = (
-                    clarify_data.get("refinedGoals")
-                    or clarify_data.get("clarifiedGoals")
-                    or clarify_data.get("response")
-                    or ""
-                )
-
-                outline_payload: Dict[str, Any] = {
-                    "clarifiedContent": clarified_content,
-                    "presentationId": presentation_id,
-                    "length": initial_input.get("length"),
-                    "audience": initial_input.get("audience"),
-                    "tone": initial_input.get("tone"),
-                    "template": initial_input.get("template"),
-                }
-                outline_data = await self._post_json(client, "/v1/outline", outline_payload)
-                outline_titles: List[str] = outline_data.get("outline", [])
-                results["stages"]["outline"] = outline_data
-
-                if not outline_titles:
-                    results["status"] = "error"
-                    results["error"] = "Outline generation returned no titles."
-                    return results
-
-                slide_payload: Dict[str, Any] = {
-                    "clarifiedContent": clarified_content,
-                    "outline": outline_titles,
-                    "audience": initial_input.get("audience"),
-                    "tone": initial_input.get("tone"),
-                    "length": initial_input.get("length"),
-                    "assets": raw_assets,
-                    "presentationId": presentation_id,
-                }
-                slide_data = await self._post_json(client, "/v1/slide/write", slide_payload)
-                slides: List[Dict[str, Any]] = slide_data.get("slides", [])
-                results["stages"]["slides"] = slide_data
-
-                reviews: List[Dict[str, Any]] = []
-                revised_slides: List[Dict[str, Any]] = []
-                for idx, slide in enumerate(slides):
-                    critique_payload = {
-                        "presentationId": presentation_id,
-                        "slideIndex": idx,
-                        "slide": slide,
-                        "audience": initial_input.get("audience"),
-                        "tone": initial_input.get("tone"),
-                        "length": initial_input.get("length"),
-                    }
-                    try:
-                        critique_data = await self._post_json(client, "/v1/slide/critique", critique_payload)
-                        revised_slides.append(critique_data.get("slide") or slide)
-                        if critique_data.get("review"):
-                            reviews.append(critique_data["review"])
-                    except Exception as crit_err:
-                        log.warning("Critique failed for slide %s: %s", idx, crit_err)
-                        revised_slides.append(slide)
-                if reviews:
-                    results["stages"]["reviews"] = reviews
-
-                script_payload = {
-                    "presentationId": presentation_id,
-                    "slides": revised_slides,
-                }
-                script_data = await self._post_json(client, "/v1/script/generate", script_payload)
-                results["stages"]["script"] = script_data
+                final_payload = workflow_result.get("final") or {}
+                workflow_state = workflow_result.get("state") or {}
 
                 results["status"] = "complete"
-                results["outline"] = outline_titles
-                results["slides"] = revised_slides
-                results["script"] = script_data.get("script", "")
-            except Exception as exc:
+                results["outline"] = workflow_state.get("outline", {}).get("sections")
+                results["slides"] = final_payload.get("slides") or []
+                results["script"] = final_payload.get("script", "")
+                results["final"] = final_payload
+            except Exception as exc:  # pragma: no cover - network fallback
                 log.error("Workflow error: %s", exc)
                 results["status"] = "error"
                 results["error"] = str(exc)

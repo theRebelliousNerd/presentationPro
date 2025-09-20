@@ -9,6 +9,10 @@ from .assets_ingest_tool import AssetsIngestTool, IngestAssetInput, IngestSummar
 from .telemetry_tool import TelemetryTool, TelemetryEvent
 from .vision_contrast_tool import VisionContrastTool, VisionAnalyzeInput, VisionAnalyzeOutput
 from .web_search_tool import WebSearchTool, WebResult
+try:
+    from workflows.tools import WORKFLOW_TOOLS  # running inside container build context
+except ImportError:
+    from adkpy.workflows.tools import WORKFLOW_TOOLS  # running from repo root
 
 TOOLS_REGISTRY = {
   "graph_rag": ArangoGraphRAGTool,
@@ -17,4 +21,6 @@ TOOLS_REGISTRY = {
   "vision_contrast": VisionContrastTool,
   "web_search": WebSearchTool,
 }
+
+WORKFLOW_TOOL_SET = WORKFLOW_TOOLS
 

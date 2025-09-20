@@ -1,25 +1,17 @@
-# Use an official Python runtime as a parent image
 FROM python:3.12-slim
 
-# Set the working directory in the container
 WORKDIR /app
 
-# Install uv
 RUN pip install --upgrade pip && pip install uv
 
-# --- Dependency Installation ---
-COPY ./requirements.txt /app/requirements.txt
-RUN uv pip install --system --no-cache -r requirements.txt
+COPY adkpy/agents/research/requirements.txt /tmp/requirements.txt
+RUN uv pip install --system --no-cache-dir -r /tmp/requirements.txt
 
-# --- Application Code ---
-# Copy the research agent's code
-COPY . /app/agents/research
+COPY adkpy /app/adkpy
 
-# --- Environment ---
-ENV PYTHONPATH=/app/agents
+ENV PYTHONPATH=/app/adkpy/agents:/app
+WORKDIR /app/adkpy/agents/research
 
-# Expose the research agent's port
 EXPOSE 10008
 
-# --- Run the application ---
 CMD ["python", "-m", "research.a2a_server"]

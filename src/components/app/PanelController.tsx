@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import ClarificationChat from '@/components/app/ClarificationChat'
+import WorkflowPanel from '@/components/app/WorkflowPanel'
 import { Presentation } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { orchListReviews } from '@/lib/orchestrator'
 import { resolveAdkBaseUrl } from '@/lib/base-url'
 
-type PanelKind = 'chat' | 'reviews' | null
+type PanelKind = 'chat' | 'reviews' | 'workflow' | null
 
 export default function PanelController({
   presentation,
@@ -106,13 +107,18 @@ export default function PanelController({
             />
           </div>
         ) : null}
+        {open === 'workflow' ? (
+          <div className="h-full p-3">
+            <WorkflowPanel presentation={presentation} />
+          </div>
+        ) : null}
         {open === 'reviews' ? (
           <div className="h-full flex flex-col p-3 gap-3">
             <div className="flex items-center justify-between">
               <div className="font-headline font-semibold">Review History</div>
               <Button size="sm" variant="outline" onClick={()=>{ setOpen(null) }}>Close</Button>
             </div>
-            <div className="text-sm text-muted-foreground">Slide {activeSlideIndex != null ? activeSlideIndex + 1 : '-'} • {presentation?.id || ''}</div>
+            <div className="text-sm text-muted-foreground">Slide {activeSlideIndex != null ? activeSlideIndex + 1 : '-'} | {presentation?.id || ''}</div>
             <div className="flex items-center gap-2">
               <Button size="sm" variant="outline" onClick={()=>{ setOffset(prev => Math.max(0, prev - limit)) }} disabled={offset<=0}>Prev</Button>
               <Button size="sm" variant="outline" onClick={()=>{ setOffset(prev => prev + limit) }}>Next</Button>

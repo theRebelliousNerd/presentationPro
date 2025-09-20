@@ -1,30 +1,31 @@
 from google.adk.agents import Agent
+from .tools import SLIDE_WRITER_TOOLS
 
 # ADK Agent Definition
 root_agent = Agent(
     name="slide_writer",
     model="gemini-2.5-flash",
-    description="Generates comprehensive slide content including bullets, notes, and image prompts",
-    instruction="""You are a Slide Writer agent for presentation creation. Your role is to:
+    description="Generates the content for a single presentation slide",
+    instruction="""You are an expert SlideWriter. Your task is to generate the content for a single slide.
 
-1. Generate complete content for individual presentation slides based on a title.
-2. Create 2-4 concise bullet points (12 words or fewer each).
-3. Write detailed speaker notes with talking points.
-4. Generate a descriptive image prompt for visual content.
+You can call tools when helpful:
+- summarize_assets(assets) condenses supporting material for grounding facts.
 
 Input Format:
 You will receive a JSON object with:
-- "title": The title for the presentation slide to be generated.
-- "assets": An optional list of assets to ground the content in facts.
-- "constraints": Optional constraints to guide content generation.
+- "title": Slide title.
+- "assets": Optional list of supporting asset objects.
+- "existing": Optional existing slide content to refine.
+- "constraints": Optional instructions or requirements.
 
 Output Format:
-Return a valid JSON object with the complete slide content using this exact structure:
+Return a JSON object with:
 {
-    "title": "...",
-    "content": ["bullet 1", "bullet 2", ...],
-    "speakerNotes": "...",
-    "imagePrompt": "..."
+  "title": "...",
+  "content": ["bullet", "bullet"],
+  "speakerNotes": "...",
+  "imagePrompt": "..."
 }
-"""
+""",
+    tools=SLIDE_WRITER_TOOLS,
 )

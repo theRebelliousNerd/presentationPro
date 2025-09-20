@@ -92,7 +92,8 @@ export default function AppRoot({ presentationIdOverride }: { presentationIdOver
 
       if (cancelGenerationRef.current) return;
 
-      const [rawSlide] = await generateSlideContent({ outline: [title], assets: contextAssets });
+      const result = await generateSlideContent({ outline: [title], assets: contextAssets, presentationId: basePresentation.id });
+      const rawSlide = (result.slides && result.slides[0]) || { title, content: [], speakerNotes: '', imagePrompt: '' } as any;
       if (cancelGenerationRef.current) return;
 
       const improved = await critiqueSlide({

@@ -1,0 +1,30 @@
+id: research_enrichment_workflow
+description: Looping workflow that alternates Graph RAG retrieval with external web search when recall is low.
+type: loop
+max_iterations: 2
+state_model: adkpy.schemas.workflow_state.PresentationWorkflowState
+steps:
+  - id: rag_refresh
+    type: tool
+    name: graph_rag.retrieve
+    input:
+      presentation_id: ${state.presentation_id}
+      query: ${state.research.query}
+      limit: 8
+    on_success:
+      mutate_state: update_research_cache
+  - id: rag_evaluation
+    type: tool
+    name: workflow.evaluate_quality
+    input:
+      slides: ${state.slides}
+      ragContext: ${state.rag.sections}
+  - id: conditional_search
+    type: agent
+    name: research
+    when: ${steps.rag_evaluation.result.telemetry.missingCitations > 0}
+    input:
+      prompt: ${state.research.prompt}
+      ragContext: ${state.rag.presentation}
+    on_success:
+      mutate_state: append_research_findings

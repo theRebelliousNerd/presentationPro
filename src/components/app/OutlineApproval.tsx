@@ -13,11 +13,14 @@ type OutlineApprovalProps = {
   clarifiedGoals: string;
   initialInput?: Presentation['initialInput'];
   presentationId?: string;
+  sessionId?: string;
+  workflowState?: any;
+  onWorkflowMeta?: (meta: { workflowSessionId?: string; workflowState?: any; workflowTrace?: any[] }) => void;
   onApprove: (outline: string[]) => void;
   onGoBack: () => void;
 };
 
-export default function OutlineApproval({ clarifiedGoals, initialInput, presentationId, onApprove, onGoBack }: OutlineApprovalProps) {
+export default function OutlineApproval({ clarifiedGoals, initialInput, presentationId, sessionId, workflowState, onWorkflowMeta, onApprove, onGoBack }: OutlineApprovalProps) {
   const [outline, setOutline] = useState<string[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +37,13 @@ export default function OutlineApproval({ clarifiedGoals, initialInput, presenta
           audience: initialInput?.audience,
           tone: initialInput?.tone,
           template: initialInput?.template,
+          sessionId,
+          workflowState,
+        });
+        onWorkflowMeta?.({
+          workflowSessionId: response.workflowSessionId,
+          workflowState: response.workflowState,
+          workflowTrace: response.workflowTrace,
         });
         setOutline(response.slideTitles);
         const usage = (response as any)._usage;
